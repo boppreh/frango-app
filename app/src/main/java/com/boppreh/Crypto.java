@@ -64,7 +64,8 @@ public class Crypto {
 
     public static byte[] sign(PrivateKey key, byte[] data) throws Exception {
         try {
-            Signature signature = Signature.getInstance("SHA256WithRSA/PSS");
+            // Should be "SHA256WithRSA/PSS", but only Android KeyStore keys support that.
+            Signature signature = Signature.getInstance("SHA256WithRSA");
             signature.initSign(key);
             signature.update(data);
             return signature.sign();

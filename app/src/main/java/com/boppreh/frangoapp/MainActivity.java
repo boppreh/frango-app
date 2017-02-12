@@ -3,6 +3,7 @@ package com.boppreh.frangoapp;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.os.AsyncTask;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -64,15 +65,22 @@ public class MainActivity extends AppCompatActivity {
     public void onActivityResult(int requestCode, int resultCode, Intent intent) {
         IntentResult scanResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, intent);
         if (scanResult != null) {
-            try {
-                initiateLogin(scanResult.getDataBytes());
-            } catch (UnsupportedEncodingException e) {
-                error("Invalid QR code", "The scanned QR code contained an invalid domain (non-UTF-8).");
-                e.printStackTrace();
-            } catch (Exception e) {
-                error("Failed to process request", e.getMessage());
-                e.printStackTrace();
-            }
+            final byte[] data = scanResult.getDataBytes();
+            (new AsyncTask<Void, Integer, Void>() {
+                @Override
+                protected Void doInBackground(Void ...params) {
+                    try {
+                        initiateLogin(data);
+                    } catch (UnsupportedEncodingException e) {
+                        error("Invalid QR code", "The scanned QR code contained an invalid domain (non-UTF-8).");
+                        e.printStackTrace();
+                    } catch (Exception e) {
+                        error("Failed to process request", e.getMessage());
+                        e.printStackTrace();
+                    }
+                    return null;
+                }
+            }).execute();
         }
     }
 
@@ -90,18 +98,22 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void post(String url, final JSONObject body) {
+        post(url, body, new Response.Listener<String>() {
+            @Override
+            public void onResponse(String response) {
+                // Ok.
+            }
+        });
+    }
+
+    private void post(String url, final JSONObject body, Response.Listener<String> responseListener) {
         RequestQueue queue = Volley.newRequestQueue(this);
 
         StringRequest stringRequest = new StringRequest(Request.Method.POST, url,
-                new Response.Listener<String>() {
-                    @Override
-                    public void onResponse(String response) {
-                        // Ok.
-                    }
-                }, new Response.ErrorListener() {
+                responseListener, new Response.ErrorListener() {
             @Override
             public void onErrorResponse(VolleyError error) {
-                error("Failed to register account", error.getMessage());
+                error("Error", error.getMessage());
                 Log.d("POST ERROR", new String(error.networkResponse.data));
                 error.printStackTrace();
             }
@@ -120,10 +132,10 @@ public class MainActivity extends AppCompatActivity {
         queue.add(stringRequest);
     }
 
-    private void registerAccount(String domain) throws Crypto.Exception, JSONException {
+    private void registerAndLogin(String domain, final byte[] sessionHash) throws Crypto.Exception, JSONException {
         byte[] seed = Crypto.random(32);
         byte[] userId = Crypto.hash(onlineMasterKey.getEncoded(), domain.getBytes());
-        Account account = new Account(userId, domain, Crypto.createKey(Crypto.hash(seed)));
+        final Account account = new Account(userId, domain, Crypto.createKey(Crypto.hash(seed)));
         byte[] recoveryCode = Crypto.encrypt(onlineMasterKey, seed);
         accounts.put(domain, account);
 
@@ -134,7 +146,20 @@ public class MainActivity extends AppCompatActivity {
         body.put("public_key", Crypto.toBase64(account.keyPair.getPublic().getEncoded()));
         body.put("recovery_code", Crypto.toBase64(recoveryCode));
 
-        post(url, body);
+        post(url, body, new Response.Listener<String>() {
+            @Override
+            public void onResponse(String response) {
+                try {
+                    login(account, sessionHash);
+                } catch (JSONException e) {
+                    error("Server replied with invalid data", e.getMessage());
+                    e.printStackTrace();
+                } catch (Crypto.Exception e) {
+                    error("Error registering new account", e.getMessage());
+                    e.printStackTrace();
+                }
+            }
+        });
     }
 
     private void login(Account account, byte[] sessionHash) throws JSONException, Crypto.Exception {
@@ -154,11 +179,14 @@ public class MainActivity extends AppCompatActivity {
         byte[] domainBytes = parts.get(1);
 
         String domain = new String(domainBytes, "UTF-8");
+        Log.d("QRCODE", domain);
 
-        if (!accounts.containsKey(domain)) {
-            registerAccount(domain);
+        if (accounts.containsKey(domain)) {
+            login(accounts.get(domain), sessionHash);
+        } else {
+            registerAndLogin(domain, sessionHash);
         }
 
-        login(accounts.get(domain), sessionHash);
+        Log.d("QRCODE", "Finished login.");
     }
 }
