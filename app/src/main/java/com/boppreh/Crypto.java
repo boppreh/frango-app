@@ -3,9 +3,14 @@ package com.boppreh;
 import android.util.Base64;
 import android.util.Log;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
+import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
@@ -18,7 +23,9 @@ import java.security.Security;
 import java.security.Signature;
 import java.security.SignatureException;
 import java.security.spec.ECGenParameterSpec;
+import java.security.spec.InvalidKeySpecException;
 import java.security.spec.RSAKeyGenParameterSpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -42,7 +49,7 @@ public class Crypto {
 
     private static SecureRandom secureRandom = new SecureRandom();
 
-    public static byte[] hash(byte[] ...dataParts) throws Exception {
+    public static byte[] hash(byte[]... dataParts) throws Exception {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA256");
             digest.update(cat(dataParts));
@@ -52,7 +59,7 @@ public class Crypto {
         }
     }
 
-    public static byte[] hash(String ...dataParts) throws Exception {
+    public static byte[] hash(String... dataParts) throws Exception {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA256");
             digest.update(cat(dataParts).getBytes("UTF-8"));
@@ -84,7 +91,7 @@ public class Crypto {
         }
     }
 
-    public static byte[] cat(byte[] ...parts) {
+    public static byte[] cat(byte[]... parts) {
         if (parts.length == 0) {
             return new byte[0];
         }
@@ -107,7 +114,7 @@ public class Crypto {
         return result;
     }
 
-    public static String cat(String ...parts) {
+    public static String cat(String... parts) {
         StringBuilder builder = new StringBuilder();
         for (String part : parts) {
             builder.append(part);
@@ -136,15 +143,41 @@ public class Crypto {
         }
     }
 
+    public static PublicKey loadPublicKey(byte[] encoded) throws Exception {
+        X509EncodedKeySpec keySpec = new X509EncodedKeySpec(encoded);
+        try {
+            return KeyFactory.getInstance("RSA").generatePublic(keySpec);
+        } catch (InvalidKeySpecException | NoSuchAlgorithmException e) {
+            throw new Exception("Failed to load public RSA key.", e);
+        }
+    }
+
+    public static PublicKey loadPublicKey(InputStream stream) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        byte[] b = new byte[1024];
+        try {
+            while (true) {
+                int bytesRead = stream.read(b);
+                if (bytesRead == -1) {
+                    break;
+                }
+                bos.write(b, 0, bytesRead);
+            }
+        } catch (IOException e) {
+            throw new Exception("Failed to load public RSA key.", e);
+        }
+        return loadPublicKey(bos.toByteArray());
+    }
+
     public static void listAvailableAlgorithms() {
-        for (Provider provider: Security.getProviders()) {
+        for (Provider provider : Security.getProviders()) {
             Log.d("PROVIDER", provider.getName());
-            for (String key: provider.stringPropertyNames())
+            for (String key : provider.stringPropertyNames())
                 Log.d("ALGOS", "\t" + key + "\t" + provider.getProperty(key));
         }
     }
 
-    public static List<byte[]> splitAt(byte[] buffer, int ...indexes) throws Exception {
+    public static List<byte[]> splitAt(byte[] buffer, int... indexes) throws Exception {
         List<byte[]> result = new ArrayList<>();
         int lastIndex = 0;
         for (int index : indexes) {

@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.ExpandableListActivity;
 import android.app.ListActivity;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.AsyncTask;
@@ -33,6 +34,11 @@ import com.google.zxing.integration.android.IntentResult;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.security.KeyPair;
 import java.security.PublicKey;
@@ -68,7 +74,33 @@ public class MainActivity extends ExpandableListActivity {
             }
         });
 
-        createMasterKey();
+        (new Runnable() {
+            @Override
+            public void run() {
+                String onlineMasterKeyFilename = "online_master_key.der";
+                try {
+                    onlineMasterKey = Crypto.loadPublicKey(openFileInput(onlineMasterKeyFilename));
+                    Log.d("FILE", "loaded master key from file");
+                } catch (FileNotFoundException e) {
+                    createMasterKey();
+                    Log.d("FILE", "created new master key");
+                    try {
+                        FileOutputStream fos = openFileOutput(onlineMasterKeyFilename, Context.MODE_PRIVATE);
+                        try {
+                            fos.write(onlineMasterKey.getEncoded());
+                            Log.d("FILE", "saved master key to file");
+                        } finally {
+                            fos.close();
+                        }
+                    } catch (IOException e1) {
+                        error("Failed to save online master key", e1.getMessage());
+                        e1.printStackTrace();
+                    }
+                } catch (Crypto.Exception e) {
+                    error("Failed to load online master key from storage.", e.getMessage());
+                }
+            }
+        }).run();
     }
 
     private void createMasterKey() {
