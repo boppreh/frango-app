@@ -1,7 +1,11 @@
 package com.boppreh.frangoapp;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
+import android.media.Image;
+import android.os.AsyncTask;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -74,24 +78,37 @@ public class Profile extends BaseExpandableListAdapter {
             logout.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    logout.setEnabled(false);
-                    JSONObject body = new JSONObject();
-                    String url = "https://" + account.domain + "/frango/logout";
-                    try {
-                        body.put("user_id", Crypto.toBase64(account.userId));
-                        body.put("session_hash", Crypto.toBase64(session.sessionHash));
-                        body.put("signature", Crypto.toBase64(Crypto.sign(account.keyPair.getPrivate(), session.sessionHash)));
-                    } catch (Crypto.Exception | JSONException e) {
-                        activity.error("Error on logout", e.getMessage());
-                        e.printStackTrace();
-                        return;
-                    }
+                    activity.runOnUiThread(new Runnable() {
+                        public void run() {
+                            new AlertDialog.Builder(activity)
+                                    .setTitle("Confirm logout")
+                                    .setMessage("Logout from this " + account.domain + " session?")
+                                    .setIcon(android.R.drawable.ic_dialog_alert)
+                                    .setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
+                                        public void onClick(DialogInterface dialog, int whichButton) {
+                                            logout.setEnabled(false);
+                                            JSONObject body = new JSONObject();
+                                            String url = "https://" + account.domain + "/frango/logout";
+                                            try {
+                                                body.put("user_id", Crypto.toBase64(account.userId));
+                                                body.put("session_hash", Crypto.toBase64(session.sessionHash));
+                                                body.put("signature", Crypto.toBase64(Crypto.sign(account.keyPair.getPrivate(), session.sessionHash)));
+                                            } catch (Crypto.Exception | JSONException e) {
+                                                activity.error("Error on logout", e.getMessage());
+                                                e.printStackTrace();
+                                                return;
+                                            }
 
-                    activity.post(url, body, new Response.Listener<String>() {
-                        @Override
-                        public void onResponse(String response) {
-                            account.sessions.remove(session);
-                            Profile.this.notifyDataSetChanged();
+                                            activity.post(url, body, new Response.Listener<String>() {
+                                                @Override
+                                                public void onResponse(String response) {
+                                                    account.sessions.remove(session);
+                                                    Profile.this.notifyDataSetChanged();
+                                                }
+                                            });
+                                        }
+                                    })
+                                    .setNegativeButton(android.R.string.no, null).show();
                         }
                     });
                 }
