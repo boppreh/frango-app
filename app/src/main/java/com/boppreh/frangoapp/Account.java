@@ -28,15 +28,17 @@ public class Account {
     public String domain;
     public KeyPair keyPair;
     public List<Session> sessions;
+    public boolean isLoading;
 
-    public Account(byte[] userId, String domain, KeyPair keyPair) {
-        this(userId, domain, keyPair, new ArrayList<Session>());
+    public Account(byte[] userId, String domain, KeyPair keyPair, boolean isLoading) {
+        this(userId, domain, keyPair, isLoading, new ArrayList<Session>());
     }
 
-    public Account(byte[] userId, String domain, KeyPair keyPair, List<Session> sessions) {
+    public Account(byte[] userId, String domain, KeyPair keyPair, boolean isLoading, List<Session> sessions) {
         this.userId = userId;
         this.domain = domain;
         this.keyPair = keyPair;
         this.sessions = sessions;
+        this.isLoading = isLoading;
     }
 }

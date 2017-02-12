@@ -72,7 +72,13 @@ public class Profile extends BaseExpandableListAdapter {
             TextView timestamp = (TextView) view.findViewById(R.id.timestamp);
             final Account account = getGroup(groupPosition);
             final Session session = account.sessions.get(childPosition);
-            timestamp.setText(DATE_FORMAT.format(session.timestamp));
+            if (session.state == Session.State.CREATING) {
+                timestamp.setText("logging in...");
+            } else if (session.state == Session.State.REMOVING) {
+                timestamp.setText("logging out...");
+            } else {
+                timestamp.setText(DATE_FORMAT.format(session.timestamp));
+            }
 
             final ImageButton logout = (ImageButton) view.findViewById(R.id.logout);
             logout.setOnClickListener(new View.OnClickListener() {
@@ -86,6 +92,9 @@ public class Profile extends BaseExpandableListAdapter {
                                     .setIcon(android.R.drawable.ic_dialog_alert)
                                     .setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
                                         public void onClick(DialogInterface dialog, int whichButton) {
+                                            session.state = Session.State.REMOVING;
+                                            Profile.this.notifyDataSetChanged();
+
                                             logout.setEnabled(false);
                                             JSONObject body = new JSONObject();
                                             String url = "https://" + account.domain + "/frango/logout";
@@ -134,13 +143,20 @@ public class Profile extends BaseExpandableListAdapter {
     }
 
     @Override
-    public View getGroupView(int groupPosition, boolean isExpanded, View view, ViewGroup parent) {
+    public View getGroupView(int groupPosition, boolean isExpanded, View view, ViewGroup
+            parent) {
         Account account = getGroup(groupPosition);
         if (view == null) {
             view = inflater.inflate(R.layout.account, parent, false);
             ((TextView) view.findViewById(R.id.domain)).setText(account.domain);
         }
-        ((TextView) view.findViewById(R.id.n_sessions)).setText(account.sessions.size() + " sessions");
+
+        if (account.isLoading) {
+            ((TextView) view.findViewById(R.id.n_sessions)).setText("registering....");
+        } else {
+            ((TextView) view.findViewById(R.id.n_sessions)).setText(account.sessions.size() + " sessions");
+        }
+
 
         return view;
     }

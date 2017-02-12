@@ -8,10 +8,16 @@ import java.util.Date;
 public class Session {
     public Date timestamp;
     public byte[] sessionHash;
+    public State state;
 
-    public Session(Date timestamp, byte[] sessionHash) {
+    public enum State {
+        CREATING, CREATED, REMOVING
+    }
+
+    public Session(Date timestamp, byte[] sessionHash, State state) {
         this.timestamp = timestamp;
         this.sessionHash = sessionHash;
+        this.state = state;
     }
 }
 

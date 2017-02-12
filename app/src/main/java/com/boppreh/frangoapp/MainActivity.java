@@ -104,22 +104,21 @@ public class MainActivity extends ExpandableListActivity {
     }
 
     public void error(final String title, final String message) {
-        (new AsyncTask<Void, Integer, Void>() {
+        runOnUiThread(new Runnable() {
             @Override
-            protected Void doInBackground(Void... params) {
+            public void run() {
                 new AlertDialog.Builder(MainActivity.this)
                         .setTitle(title)
                         .setMessage(message)
                         .setIcon(android.R.drawable.ic_dialog_alert)
-                        .setPositiveButton("ok", new DialogInterface.OnClickListener() {
+                        .setPositiveButton("Ok", new DialogInterface.OnClickListener() {
                             @Override
                             public void onClick(DialogInterface dialog, int which) {
                             }
                         })
                         .show();
-                return null;
             }
-        }).execute();
+        });
     }
 
     private void post(String url, final JSONObject body) {
@@ -158,9 +157,18 @@ public class MainActivity extends ExpandableListActivity {
     }
 
     private void registerAndLogin(String domain, final byte[] sessionHash) throws Crypto.Exception, JSONException {
-        byte[] seed = Crypto.random(32);
         byte[] userId = Crypto.hash(onlineMasterKey.getEncoded(), domain.getBytes());
-        final Account account = new Account(userId, domain, Crypto.createKey(Crypto.hash(seed)));
+        final Account account = new Account(userId, domain, null, true);
+        profile.accounts.add(0, account);
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                profile.notifyDataSetChanged();
+            }
+        });
+
+        byte[] seed = Crypto.random(32);
+        account.keyPair = Crypto.createKey(Crypto.hash(seed));
         byte[] recoveryCode = Crypto.encrypt(onlineMasterKey, seed);
 
         String url = "https://" + account.domain + "/frango/register";
@@ -174,7 +182,7 @@ public class MainActivity extends ExpandableListActivity {
             @Override
             public void onResponse(String response) {
                 try {
-                    profile.accounts.add(0, account);
+                    account.isLoading = false;
                     profile.notifyDataSetChanged();
                     login(account, sessionHash);
                 } catch (JSONException e) {
@@ -196,11 +204,14 @@ public class MainActivity extends ExpandableListActivity {
         body.put("session_hash", Crypto.toBase64(sessionHash));
         body.put("signature", Crypto.toBase64(Crypto.sign(account.keyPair.getPrivate(), sessionHash)));
 
+        final Session session = new Session(new Date(), sessionHash, Session.State.CREATING);
+        account.sessions.add(0, session);
+
         post(url, body, new Response.Listener<String>() {
 
             @Override
             public void onResponse(String response) {
-                account.sessions.add(0, new Session(new Date(), sessionHash));
+                session.state = Session.State.CREATED;
                 profile.notifyDataSetChanged();
             }
         });
