@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">FrangoApp</string>
+    <string name="accounts">Accounts</string>
 </resources>

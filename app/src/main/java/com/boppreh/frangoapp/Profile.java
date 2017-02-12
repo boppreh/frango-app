@@ -2,17 +2,28 @@ package com.boppreh.frangoapp;
 
 import android.app.Activity;
 import android.content.Context;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
+import android.widget.BaseExpandableListAdapter;
 import android.widget.Button;
+import android.widget.ExpandableListAdapter;
 import android.widget.ImageButton;
 import android.widget.ListAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
 
+import com.android.volley.Response;
+import com.boppreh.Crypto;
+
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -21,59 +32,109 @@ import java.util.Map;
 /**
  * Created by BoppreH on 2017-02-12.
  */
-public class Profile extends BaseAdapter implements ListAdapter {
+public class Profile extends BaseExpandableListAdapter {
 
-    Activity activity;
-    LinkedHashMap<String, Account> accounts;
+    public static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd' 'HH:mm:ssZ");
 
-    public Profile(Activity activity) {
+    LayoutInflater inflater;
+    MainActivity activity;
+    List<Account> accounts;
+
+    public Profile(MainActivity activity) {
+        this.inflater = LayoutInflater.from(activity);
         this.activity = activity;
-        this.accounts = new LinkedHashMap<>();
+        this.accounts = new ArrayList<>();
     }
 
     @Override
-    public int getCount() {
+    public Session getChild(int groupPosition, int childPosition) {
+        return getGroup(groupPosition).sessions.get(childPosition);
+    }
+
+    @Override
+    public long getChildId(int groupPosition, int childPosition) {
+        return childPosition;
+    }
+
+    @Override
+    public int getChildrenCount(int groupPosition) {
+        return getGroup(groupPosition).sessions.size();
+    }
+
+    @Override
+    public View getChildView(int groupPosition, int childPosition, boolean isLastChild, View view, final ViewGroup parent) {
+        if (view == null) {
+            view = inflater.inflate(R.layout.session, parent, false);
+            TextView timestamp = (TextView) view.findViewById(R.id.timestamp);
+            final Account account = getGroup(groupPosition);
+            final Session session = account.sessions.get(childPosition);
+            timestamp.setText(DATE_FORMAT.format(session.timestamp));
+
+            final ImageButton logout = (ImageButton) view.findViewById(R.id.logout);
+            logout.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    logout.setEnabled(false);
+                    JSONObject body = new JSONObject();
+                    String url = "https://" + account.domain + "/frango/logout";
+                    try {
+                        body.put("user_id", Crypto.toBase64(account.userId));
+                        body.put("session_hash", Crypto.toBase64(session.sessionHash));
+                        body.put("signature", Crypto.toBase64(Crypto.sign(account.keyPair.getPrivate(), session.sessionHash)));
+                    } catch (Crypto.Exception | JSONException e) {
+                        activity.error("Error on logout", e.getMessage());
+                        e.printStackTrace();
+                        return;
+                    }
+
+                    activity.post(url, body, new Response.Listener<String>() {
+                        @Override
+                        public void onResponse(String response) {
+                            account.sessions.remove(session);
+                            Profile.this.notifyDataSetChanged();
+                        }
+                    });
+                }
+            });
+        }
+
+        return view;
+    }
+
+    @Override
+    public Account getGroup(int groupPosition) {
+        return accounts.get(groupPosition);
+    }
+
+    @Override
+    public int getGroupCount() {
         return accounts.size();
     }
 
     @Override
-    public Account getItem(int position) {
-        return new ArrayList<>(accounts.values()).get(position);
+    public long getGroupId(final int groupPosition) {
+        return groupPosition;
     }
 
     @Override
-    public long getItemId(int position) {
-        return 0;
-    }
-
-    @Override
-    public View getView(final int position, View convertView, ViewGroup parent) {
-        View view = convertView;
+    public View getGroupView(int groupPosition, boolean isExpanded, View view, ViewGroup parent) {
+        Account account = getGroup(groupPosition);
         if (view == null) {
-            LayoutInflater inflater = activity.getLayoutInflater();
             view = inflater.inflate(R.layout.account, parent, false);
+            ((TextView) view.findViewById(R.id.domain)).setText(account.domain);
         }
-
-        final Account account = getItem(position);
-
-        //Handle TextView and display string from your list
-        TextView listItemText = (TextView)view.findViewById(R.id.domain);
-        listItemText.setText(account.domain);
-
-        //Handle buttons and add onClickListeners
-        ImageButton deleteBtn = (ImageButton)view.findViewById(R.id.logout);
-
-        ListView sessions = (ListView) view.findViewById(R.id.sessions);
-        sessions.setAdapter(account);
-
-        deleteBtn.setOnClickListener(new View.OnClickListener(){
-            @Override
-            public void onClick(View v) {
-                accounts.remove(account.userId);
-                notifyDataSetChanged();
-            }
-        });
+        ((TextView) view.findViewById(R.id.n_sessions)).setText(account.sessions.size() + " sessions");
 
         return view;
+    }
+
+    @Override
+    public boolean hasStableIds() {
+        return true;
+    }
+
+    @Override
+    public boolean isChildSelectable(int groupPosition, int childPosition) {
+        return true;
     }
 }

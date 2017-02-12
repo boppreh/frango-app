@@ -2,6 +2,7 @@ package com.boppreh.frangoapp;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.ExpandableListActivity;
 import android.app.ListActivity;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -13,6 +14,7 @@ import android.util.Log;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.ExpandableListView;
 import android.widget.ListView;
 import android.widget.SimpleAdapter;
 import android.widget.TextView;
@@ -40,7 +42,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public class MainActivity extends ListActivity {
+public class MainActivity extends ExpandableListActivity {
 
     public static final int SESSION_HASH_SIZE = 32;
 
@@ -54,31 +56,19 @@ public class MainActivity extends ListActivity {
 
         profile = new Profile(this);
 
-        Account account1 = new Account(this, "user_id".getBytes(), "4mm.org", null);
-        account1.sessions.add(new Session(new Date(100000), "hash"));
-        account1.sessions.add(new Session(new Date(200000), "hash"));
-        account1.sessions.add(new Session(new Date(300000), "hash"));
-        profile.accounts.put("4mm.org", account1);
-
-        Account account2 = new Account(this, "user_id".getBytes(), "boppreh.com", null);
-        account2.sessions.add(new Session(new Date(400000), "hash"));
-        profile.accounts.put("boppreh.com", account2);
-
-        Account account3 = new Account(this, "user_id".getBytes(), "example.com", null);
-        profile.accounts.put("example.com", account3);
-
         setListAdapter(profile);
         setContentView(R.layout.activity_main);
 
         final IntentIntegrator integrator = new IntentIntegrator(this);
         Button clickButton = (Button) findViewById(R.id.scan);
         clickButton.setOnClickListener(new View.OnClickListener() {
-
             @Override
             public void onClick(View v) {
                 integrator.initiateScan();
             }
         });
+
+        createMasterKey();
     }
 
     private void createMasterKey() {
@@ -113,12 +103,11 @@ public class MainActivity extends ListActivity {
         }
     }
 
-    private void error(final String title, final String message) {
-        final Activity activity = this;
+    public void error(final String title, final String message) {
         (new AsyncTask<Void, Integer, Void>() {
             @Override
             protected Void doInBackground(Void... params) {
-                new AlertDialog.Builder(activity)
+                new AlertDialog.Builder(MainActivity.this)
                         .setTitle(title)
                         .setMessage(message)
                         .setIcon(android.R.drawable.ic_dialog_alert)
@@ -142,7 +131,7 @@ public class MainActivity extends ListActivity {
         });
     }
 
-    private void post(String url, final JSONObject body, Response.Listener<String> responseListener) {
+    public void post(String url, final JSONObject body, Response.Listener<String> responseListener) {
         RequestQueue queue = Volley.newRequestQueue(this);
 
         StringRequest stringRequest = new StringRequest(Request.Method.POST, url,
@@ -171,9 +160,8 @@ public class MainActivity extends ListActivity {
     private void registerAndLogin(String domain, final byte[] sessionHash) throws Crypto.Exception, JSONException {
         byte[] seed = Crypto.random(32);
         byte[] userId = Crypto.hash(onlineMasterKey.getEncoded(), domain.getBytes());
-        final Account account = new Account(this, userId, domain, Crypto.createKey(Crypto.hash(seed)));
+        final Account account = new Account(userId, domain, Crypto.createKey(Crypto.hash(seed)));
         byte[] recoveryCode = Crypto.encrypt(onlineMasterKey, seed);
-        //accounts.put(domain, account);
 
         String url = "https://" + account.domain + "/frango/register";
 
@@ -186,6 +174,8 @@ public class MainActivity extends ListActivity {
             @Override
             public void onResponse(String response) {
                 try {
+                    profile.accounts.add(0, account);
+                    profile.notifyDataSetChanged();
                     login(account, sessionHash);
                 } catch (JSONException e) {
                     error("Server replied with invalid data", e.getMessage());
@@ -198,7 +188,7 @@ public class MainActivity extends ListActivity {
         });
     }
 
-    private void login(Account account, byte[] sessionHash) throws JSONException, Crypto.Exception {
+    private void login(final Account account, final byte[] sessionHash) throws JSONException, Crypto.Exception {
         String url = "https://" + account.domain + "/frango/login";
 
         final JSONObject body = new JSONObject();
@@ -206,7 +196,23 @@ public class MainActivity extends ListActivity {
         body.put("session_hash", Crypto.toBase64(sessionHash));
         body.put("signature", Crypto.toBase64(Crypto.sign(account.keyPair.getPrivate(), sessionHash)));
 
-        post(url, body);
+        post(url, body, new Response.Listener<String>() {
+
+            @Override
+            public void onResponse(String response) {
+                account.sessions.add(0, new Session(new Date(), sessionHash));
+                profile.notifyDataSetChanged();
+            }
+        });
+    }
+
+    private Account getAccount(String domain) throws NoSuchAccountException {
+        for (Account account : profile.accounts) {
+            if (account.domain.equals(domain)) {
+                return account;
+            }
+        }
+        throw new NoSuchAccountException(domain);
     }
 
     private void initiateLogin(byte[] qrCodeData) throws UnsupportedEncodingException, Crypto.Exception, JSONException {
@@ -215,24 +221,18 @@ public class MainActivity extends ListActivity {
         byte[] domainBytes = parts.get(1);
 
         final String domain = new String(domainBytes, "UTF-8");
-        Log.d("QRCODE", domain);
 
-        if (profile.accounts.containsKey(domain)) {
-            login(profile.accounts.get(domain), sessionHash);
-        } else {
+        try {
+            Account account = getAccount(domain);
+            login(account, sessionHash);
+        } catch (NoSuchAccountException e) {
             registerAndLogin(domain, sessionHash);
-
-            final MainActivity activity = this;
-            this.runOnUiThread(new Runnable() {
-                public void run() {
-                    //ListView accounts = (ListView) findViewById(R.id.accounts);
-                    //TextView session = new TextView(activity);
-                    //session.setText("Creating account at " + domain);
-                    //accounts.addView(session);
-                }
-            });
         }
+    }
+}
 
-        Log.d("QRCODE", "Finished login.");
+class NoSuchAccountException extends Exception {
+    public NoSuchAccountException(String domain) {
+        super("No account for domain " + domain);
     }
 }

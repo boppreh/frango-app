@@ -1,41 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:orientation="horizontal">
 
-    <LinearLayout
-        android:orientation="horizontal"
-        android:layout_width="match_parent"
-        android:layout_height="40dp">
-
-        <TextView
-            android:id="@+id/domain"
-            android:text="TextView"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center_vertical"
-            android:textAppearance="@style/TextAppearance.AppCompat"
-            android:textSize="20sp" />
-
-        <ImageButton
-            android:id="@+id/logout"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:layout_alignParentRight="true"
-            android:scaleType="centerInside"
-            android:adjustViewBounds="true"
-            android:src="@android:drawable/ic_delete"
-            style="@style/Widget.AppCompat.Button.Borderless" />
-
-    </LinearLayout>
-
-    <ListView
-        android:id="@+id/sessions"
-        android:layout_width="match_parent"
+    <TextView
+        android:id="@+id/domain"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:paddingLeft="20dp" />
+        android:layout_weight="1"
+        android:gravity="start|bottom"
+        android:textAppearance="@style/TextAppearance.AppCompat"
+        android:textSize="20sp"
+        tools:text="Domain">
+
+    </TextView>
+
+    <TextView
+        android:text="Session count"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/n_sessions"
+        android:layout_gravity="end|bottom"
+        android:textStyle="normal|italic" />
 </LinearLayout>

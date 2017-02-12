@@ -6,21 +6,20 @@
 
     <TextView
         android:id="@+id/timestamp"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="match_parent"
         android:layout_weight="1"
         android:gravity="center_vertical"
-        android:text="TextView"
         android:textAppearance="@style/TextAppearance.AppCompat" />
 
     <ImageButton
         android:id="@+id/logout"
+        style="@style/Widget.AppCompat.Button.Borderless"
+        android:contentDescription="Logout"
         android:layout_width="wrap_content"
         android:layout_height="match_parent"
-        android:layout_alignParentRight="true"
         android:adjustViewBounds="true"
         android:scaleType="centerInside"
-        android:src="@android:drawable/ic_delete"
-        style="@style/Widget.AppCompat.Button.Borderless" />
+        android:src="@android:drawable/ic_menu_delete" />
 
 </LinearLayout>

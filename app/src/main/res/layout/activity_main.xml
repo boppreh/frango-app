@@ -9,44 +9,35 @@
     android:paddingRight="@dimen/activity_horizontal_margin"
     android:paddingTop="@dimen/activity_vertical_margin"
     tools:context="com.boppreh.frangoapp.MainActivity"
-    android:orientation="vertical"
-    android:divider="?attr/dividerHorizontal">
-
-    <Button
-        android:text="Scan and Login"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:id="@+id/scan"
-        android:layout_alignParentTop="true"
-        android:layout_alignParentLeft="true"
-        android:layout_alignParentStart="true"
-        android:layout_alignParentRight="true"
-        android:layout_alignParentEnd="true"
-        style="@style/Widget.AppCompat.Button.Colored" />
+    android:orientation="vertical">
 
     <LinearLayout
-        android:layout_marginTop="10dp"
         android:orientation="vertical"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="0dp"
+        android:layout_weight="1">
 
         <TextView
-            android:text="Accounts"
+            android:id="@+id/accounts_header"
+            android:text="@string/accounts"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:id="@+id/accounts_header"
-            android:textAppearance="@style/TextAppearance.AppCompat.Display1"
             android:textSize="18sp"
-            android:textStyle="normal|bold"
-            android:textAllCaps="false"
+            android:textStyle="bold"
             android:textAlignment="center" />
 
         <ExpandableListView
+            android:id="@android:id/list"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_centerHorizontal="true"
-            android:layout_below="@+id/scan"
-            android:id="@android:id/list" />
+            android:layout_height="0dp"
+            android:layout_weight="1" />
     </LinearLayout>
+
+    <Button
+        android:id="@+id/scan"
+        android:text="Scan and Login"
+        android:layout_width="match_parent"
+        style="@style/Widget.AppCompat.Button.Colored"
+        android:layout_height="60dp" />
 
 </LinearLayout>

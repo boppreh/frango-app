@@ -7,9 +7,9 @@ import java.util.Date;
  */
 public class Session {
     public Date timestamp;
-    public String sessionHash;
+    public byte[] sessionHash;
 
-    public Session(Date timestamp, String sessionHash) {
+    public Session(Date timestamp, byte[] sessionHash) {
         this.timestamp = timestamp;
         this.sessionHash = sessionHash;
     }
