@@ -6,9 +6,7 @@ import android.util.Log;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
-import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.KeyPair;
@@ -22,9 +20,7 @@ import java.security.SecureRandom;
 import java.security.Security;
 import java.security.Signature;
 import java.security.SignatureException;
-import java.security.spec.ECGenParameterSpec;
 import java.security.spec.InvalidKeySpecException;
-import java.security.spec.RSAKeyGenParameterSpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -40,6 +36,7 @@ import javax.crypto.NoSuchPaddingException;
  */
 
 public class Crypto {
+
 
     public static class Exception extends java.lang.Exception {
         public Exception(String message, Throwable cause) {
@@ -122,8 +119,16 @@ public class Crypto {
         return builder.toString();
     }
 
+    public static String toBase64(String data) {
+        return Base64.encodeToString(data.getBytes(), Base64.DEFAULT);
+    }
+
     public static String toBase64(byte[] data) {
         return Base64.encodeToString(data, Base64.DEFAULT);
+    }
+
+    public static byte[] fromBase64(String data) {
+        return Base64.decode(data, Base64.DEFAULT);
     }
 
     public static byte[] random(int nBytes) {
@@ -152,7 +157,7 @@ public class Crypto {
         }
     }
 
-    public static PublicKey loadPublicKey(InputStream stream) throws Exception {
+    public static byte[] read(InputStream stream) throws Exception {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         byte[] b = new byte[1024];
         try {
@@ -166,7 +171,11 @@ public class Crypto {
         } catch (IOException e) {
             throw new Exception("Failed to load public RSA key.", e);
         }
-        return loadPublicKey(bos.toByteArray());
+        return bos.toByteArray();
+    }
+
+    public static PublicKey loadPublicKey(InputStream stream) throws Exception {
+        return loadPublicKey(read(stream));
     }
 
     public static void listAvailableAlgorithms() {

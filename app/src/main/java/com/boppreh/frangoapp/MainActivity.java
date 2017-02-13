@@ -1,24 +1,18 @@
 package com.boppreh.frangoapp;
 
-import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.ExpandableListActivity;
-import android.app.ListActivity;
+import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.AsyncTask;
-import android.support.v4.widget.NestedScrollView;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
-import android.widget.ArrayAdapter;
+import android.widget.AdapterView;
 import android.widget.Button;
 import android.widget.ExpandableListView;
-import android.widget.ListView;
-import android.widget.SimpleAdapter;
-import android.widget.TextView;
 
 import com.android.volley.AuthFailureError;
 import com.android.volley.Request;
@@ -35,7 +29,6 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -43,38 +36,48 @@ import java.io.UnsupportedEncodingException;
 import java.security.KeyPair;
 import java.security.PublicKey;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 public class MainActivity extends ExpandableListActivity {
 
     public static final int SESSION_HASH_SIZE = 32;
 
     PublicKey onlineMasterKey;
-    Profile profile;
+    Accounts accounts;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        profile = new Profile(this);
+        accounts = new Accounts(this);
+        try {
+            accounts.accounts.add(Account.load(this, "4mm.org"));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
-        setListAdapter(profile);
+        setListAdapter(accounts);
+
         setContentView(R.layout.activity_main);
 
         final IntentIntegrator integrator = new IntentIntegrator(this);
         Button clickButton = (Button) findViewById(R.id.scan);
-        clickButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                integrator.initiateScan();
-            }
-        });
+        clickButton.setOnClickListener(new View.OnClickListener()
 
-        (new Runnable() {
+                                       {
+                                           @Override
+                                           public void onClick(View v) {
+                                               integrator.initiateScan();
+                                           }
+                                       }
+
+        );
+
+        final ProgressDialog dialog = ProgressDialog.show(this, "", "Checking online master key...", false);
+        new
+
+                Thread(new Runnable() {
             @Override
             public void run() {
                 String onlineMasterKeyFilename = "online_master_key.der";
@@ -82,15 +85,16 @@ public class MainActivity extends ExpandableListActivity {
                     onlineMasterKey = Crypto.loadPublicKey(openFileInput(onlineMasterKeyFilename));
                     Log.d("FILE", "loaded master key from file");
                 } catch (FileNotFoundException e) {
+                    dialog.setMessage("Online master key not found. Creating new....");
                     createMasterKey();
                     Log.d("FILE", "created new master key");
                     try {
-                        FileOutputStream fos = openFileOutput(onlineMasterKeyFilename, Context.MODE_PRIVATE);
+                        FileOutputStream outputStream = openFileOutput(onlineMasterKeyFilename, Context.MODE_PRIVATE);
                         try {
-                            fos.write(onlineMasterKey.getEncoded());
+                            outputStream.write(onlineMasterKey.getEncoded());
                             Log.d("FILE", "saved master key to file");
                         } finally {
-                            fos.close();
+                            outputStream.close();
                         }
                     } catch (IOException e1) {
                         error("Failed to save online master key", e1.getMessage());
@@ -99,8 +103,9 @@ public class MainActivity extends ExpandableListActivity {
                 } catch (Crypto.Exception e) {
                     error("Failed to load online master key from storage.", e.getMessage());
                 }
+                dialog.dismiss();
             }
-        }).run();
+        }).start();
     }
 
     private void createMasterKey() {
@@ -163,17 +168,21 @@ public class MainActivity extends ExpandableListActivity {
     }
 
     public void post(String url, final JSONObject body, Response.Listener<String> responseListener) {
-        RequestQueue queue = Volley.newRequestQueue(this);
-
-        StringRequest stringRequest = new StringRequest(Request.Method.POST, url,
-                responseListener, new Response.ErrorListener() {
+        post(url, body, responseListener, new Response.ErrorListener() {
             @Override
             public void onErrorResponse(VolleyError error) {
                 error("Error", error.getMessage());
                 Log.d("POST ERROR", new String(error.networkResponse.data));
                 error.printStackTrace();
             }
-        }) {
+        });
+    }
+
+    public void post(String url, final JSONObject body, Response.Listener<String> responseListener, Response.ErrorListener errorListener) {
+        RequestQueue queue = Volley.newRequestQueue(this);
+
+        StringRequest stringRequest = new StringRequest(Request.Method.POST, url,
+                responseListener, errorListener) {
             @Override
             public String getBodyContentType() {
                 return "application/json";
@@ -191,11 +200,11 @@ public class MainActivity extends ExpandableListActivity {
     private void registerAndLogin(String domain, final byte[] sessionHash) throws Crypto.Exception, JSONException {
         byte[] userId = Crypto.hash(onlineMasterKey.getEncoded(), domain.getBytes());
         final Account account = new Account(userId, domain, null, true);
-        profile.accounts.add(0, account);
+        accounts.accounts.add(0, account);
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                profile.notifyDataSetChanged();
+                accounts.notifyDataSetChanged();
             }
         });
 
@@ -215,7 +224,7 @@ public class MainActivity extends ExpandableListActivity {
             public void onResponse(String response) {
                 try {
                     account.isLoading = false;
-                    profile.notifyDataSetChanged();
+                    accounts.notifyDataSetChanged();
                     login(account, sessionHash);
                 } catch (JSONException e) {
                     error("Server replied with invalid data", e.getMessage());
@@ -244,13 +253,18 @@ public class MainActivity extends ExpandableListActivity {
             @Override
             public void onResponse(String response) {
                 session.state = Session.State.CREATED;
-                profile.notifyDataSetChanged();
+                accounts.notifyDataSetChanged();
+                try {
+                    account.save(MainActivity.this);
+                } catch (IOException | JSONException e) {
+                    error("Failed to persist changes", e.getMessage());
+                }
             }
         });
     }
 
     private Account getAccount(String domain) throws NoSuchAccountException {
-        for (Account account : profile.accounts) {
+        for (Account account : accounts.accounts) {
             if (account.domain.equals(domain)) {
                 return account;
             }

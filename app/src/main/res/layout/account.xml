@@ -24,4 +24,5 @@
         android:id="@+id/n_sessions"
         android:layout_gravity="end|bottom"
         android:textStyle="normal|italic" />
+
 </LinearLayout>
