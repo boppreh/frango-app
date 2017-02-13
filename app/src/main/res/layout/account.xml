@@ -2,17 +2,19 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="horizontal">
+    android:layout_height="40dp"
+    android:orientation="horizontal"
+    android:descendantFocusability="blocksDescendants">
 
     <TextView
         android:id="@+id/domain"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:gravity="start|bottom"
+        android:layout_marginLeft="40dp"
         android:textAppearance="@style/TextAppearance.AppCompat"
         android:textSize="20sp"
+        android:layout_gravity="center"
         tools:text="Domain">
 
     </TextView>
@@ -22,7 +24,17 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:id="@+id/n_sessions"
-        android:layout_gravity="end|bottom"
+        android:layout_gravity="center"
         android:textStyle="normal|italic" />
+
+    <ImageButton
+        android:id="@+id/delete"
+        style="@style/Widget.AppCompat.Button.Borderless"
+        android:contentDescription="Delete account"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:adjustViewBounds="true"
+        android:scaleType="centerInside"
+        android:src="@android:drawable/ic_menu_delete" />
 
 </LinearLayout>

@@ -161,7 +161,55 @@ public class Accounts extends BaseExpandableListAdapter {
         if (view == null) {
             view = inflater.inflate(R.layout.account, parent, false);
             ((TextView) view.findViewById(R.id.domain)).setText(account.domain);
-            
+
+            final ImageButton delete = (ImageButton) view.findViewById(R.id.delete);
+            delete.setOnClickListener(new View.OnClickListener() {
+
+                @Override
+                public void onClick(View v) {
+                    new AlertDialog.Builder(activity)
+                            .setTitle("Confirm account removal")
+                            .setMessage("Do you really want to delete your account at " + account.domain + "?")
+                            .setIcon(android.R.drawable.ic_dialog_alert)
+                            .setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
+                                public void onClick(DialogInterface dialog, int whichButton) {
+                                    JSONObject body = new JSONObject();
+                                    try {
+                                        body.put("user_id", Crypto.toBase64(account.userId));
+                                    } catch (JSONException e) {
+                                        activity.error("Failed to remove account", e.getMessage());
+                                        e.printStackTrace();
+                                        return;
+                                    }
+                                    activity.post("https://" + account.domain + "/frango/delete", body, new Response.Listener<String>() {
+                                        @Override
+                                        public void onResponse(String response) {
+                                            accounts.remove(account);
+                                            notifyDataSetChanged();
+                                            if (account.domain.equals("4mm.org")) {
+                                                Log.d("DELETE", activity.deleteFile(account.getFilename())+"");
+                                            }
+                                        }
+                                    },  new Response.ErrorListener() {
+                                        @Override
+                                        public void onErrorResponse(VolleyError error) {
+                                            if (error.networkResponse.statusCode == 404) {
+                                                activity.error("Invalid account", "The account doesn't exist anymore. It'll be removed from the list.");
+                                                accounts.remove(account);
+                                                notifyDataSetChanged();
+                                                if (account.domain.equals("4mm.org")) {
+                                                    Log.d("DELETE", activity.deleteFile(account.getFilename())+"");
+                                                }
+                                            } else {
+                                                activity.error("Error on account removal", error.getMessage());
+                                            }
+                                        }
+                                    });
+                                }
+                            })
+                            .setNegativeButton(android.R.string.no, null).show();
+                }
+            });
         }
 
         if (account.isLoading) {

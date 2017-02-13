@@ -96,8 +96,12 @@ public class Account {
         return new Account(userId, domain, keyPair, false, sessions);
     }
 
+    public String getFilename() {
+        return "account_" + Crypto.toBase64(domain) + ".json";
+    }
+
     public void save(Activity activity) throws JSONException, IOException {
-        FileOutputStream outputStream = activity.openFileOutput("account_" + Crypto.toBase64(domain) + ".json", Context.MODE_PRIVATE);
+        FileOutputStream outputStream = activity.openFileOutput(getFilename(), Context.MODE_PRIVATE);
         outputStream.write(marshall().toString().getBytes());
     }
 
