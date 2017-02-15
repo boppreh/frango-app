@@ -151,7 +151,6 @@ public class MainActivity extends AppCompatActivity {
                 new AlertDialog.Builder(MainActivity.this)
                         .setTitle(title)
                         .setMessage(message)
-                        .setIcon(android.R.drawable.ic_dialog_alert)
                         .setPositiveButton("Ok", new DialogInterface.OnClickListener() {
                             @Override
                             public void onClick(DialogInterface dialog, int which) {
@@ -175,8 +174,11 @@ public class MainActivity extends AppCompatActivity {
         post(url, body, responseListener, new Response.ErrorListener() {
             @Override
             public void onErrorResponse(VolleyError error) {
-                error("Error", error.getMessage());
-                Log.d("POST ERROR", new String(error.networkResponse.data));
+                try {
+                    error("Error", (String) new JSONObject(new String(error.networkResponse.data)).get("error"));
+                } catch (JSONException e) {
+                    error("Error", "Server returned status code " + error.networkResponse.statusCode + " but an invalid body.");
+                }
                 error.printStackTrace();
             }
         });
