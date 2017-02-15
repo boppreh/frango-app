@@ -8,6 +8,8 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
@@ -38,7 +40,7 @@ import java.security.PublicKey;
 import java.util.Date;
 import java.util.List;
 
-public class MainActivity extends ExpandableListActivity {
+public class MainActivity extends AppCompatActivity {
 
     public static final int SESSION_HASH_SIZE = 32;
 
@@ -57,9 +59,11 @@ public class MainActivity extends ExpandableListActivity {
             e.printStackTrace();
         }
 
-        setListAdapter(accounts);
-
         setContentView(R.layout.activity_main);
+
+        ((ExpandableListView) findViewById(R.id.accounts)).setAdapter(accounts);
+
+        setSupportActionBar((Toolbar) findViewById(R.id.toolbar));
 
         final IntentIntegrator integrator = new IntentIntegrator(this);
         Button clickButton = (Button) findViewById(R.id.scan);
