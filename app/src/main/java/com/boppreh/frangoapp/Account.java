@@ -2,7 +2,6 @@ package com.boppreh.frangoapp;
 
 import android.app.Activity;
 import android.content.Context;
-import android.util.Log;
 
 import com.boppreh.Crypto;
 
@@ -13,7 +12,6 @@ import org.json.JSONObject;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -21,7 +19,6 @@ import java.io.ObjectOutputStream;
 import java.security.KeyPair;
 import java.text.ParseException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
@@ -33,16 +30,20 @@ public class Account {
     public String domain;
     public KeyPair keyPair;
     public List<Session> sessions;
+    public byte[] recoveryCode;
+    public byte[] revocationCodeHash;
     public boolean isLoading;
 
-    public Account(byte[] userId, String domain, KeyPair keyPair, boolean isLoading) {
-        this(userId, domain, keyPair, isLoading, new ArrayList<Session>());
+    public Account(byte[] userId, String domain, KeyPair keyPair, byte[] recoveryCode, byte[] revocationCodeHash, boolean isLoading) {
+        this(userId, domain, keyPair, recoveryCode, revocationCodeHash, isLoading, new ArrayList<Session>());
     }
 
-    public Account(byte[] userId, String domain, KeyPair keyPair, boolean isLoading, List<Session> sessions) {
+    public Account(byte[] userId, String domain, KeyPair keyPair, byte[] recoveryCode, byte[] revocationCodeHash, boolean isLoading, List<Session> sessions) {
         this.userId = userId;
         this.domain = domain;
         this.keyPair = keyPair;
+        this.recoveryCode = recoveryCode;
+        this.revocationCodeHash = revocationCodeHash;
         this.sessions = sessions;
         this.isLoading = isLoading;
     }
@@ -60,6 +61,8 @@ public class Account {
             sessionsJson.put(session.marshall());
         }
         obj.put("sessions", sessionsJson);
+        obj.put("recovery_code", Crypto.toBase64(recoveryCode));
+        obj.put("revocation_code_hash", Crypto.toBase64(revocationCodeHash));
 
         ByteArrayOutputStream byteOutput = new ByteArrayOutputStream();
         ObjectOutputStream objectOutput = null;
@@ -78,6 +81,8 @@ public class Account {
         JSONObject obj = new JSONObject(json);
         byte[] userId = Crypto.fromBase64(obj.getString("user_id"));
         String domain = obj.getString("domain");
+        byte[] revocationCodeHash = Crypto.fromBase64(obj.getString("revocation_code_hash"));
+        byte[] recoveryCode = Crypto.fromBase64(obj.getString("recovery_code"));
 
         JSONArray sessionsJson = obj.getJSONArray("sessions");
         List<Session> sessions = new ArrayList<>();
@@ -93,7 +98,7 @@ public class Account {
         ObjectInputStream objectStream = new ObjectInputStream(inputStream);
         KeyPair keyPair = (KeyPair) objectStream.readObject();
 
-        return new Account(userId, domain, keyPair, false, sessions);
+        return new Account(userId, domain, keyPair, recoveryCode, revocationCodeHash, false, sessions);
     }
 
     public String getFilename() {

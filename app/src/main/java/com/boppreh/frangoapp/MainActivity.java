@@ -11,6 +11,8 @@ import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.Button;
@@ -36,6 +38,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.security.KeyPair;
+import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.util.Date;
 import java.util.List;
@@ -45,6 +48,7 @@ public class MainActivity extends AppCompatActivity {
     public static final int SESSION_HASH_SIZE = 32;
 
     PublicKey onlineMasterKey;
+    PrivateKey offlineMasterKey;
     Accounts accounts;
 
     @Override
@@ -54,7 +58,7 @@ public class MainActivity extends AppCompatActivity {
 
         accounts = new Accounts(this);
         try {
-            accounts.accounts.add(Account.load(this, "4mm.org"));
+            accounts.accounts.add(Account.load(this, "4mma.org"));
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -78,6 +82,10 @@ public class MainActivity extends AppCompatActivity {
 
         );
 
+        createMasterKey();
+    }
+
+    private void loadMasterKey() {
         final ProgressDialog dialog = ProgressDialog.show(this, "", "Checking online master key...", false);
         new
 
@@ -85,20 +93,25 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void run() {
                 String onlineMasterKeyFilename = "online_master_key.der";
+                String offlineMasterKeyFilename = "offline_master_key.der";
                 try {
                     onlineMasterKey = Crypto.loadPublicKey(openFileInput(onlineMasterKeyFilename));
+                    offlineMasterKey = Crypto.loadPrivateKey(openFileInput(offlineMasterKeyFilename));
                     Log.d("FILE", "loaded master key from file");
                 } catch (FileNotFoundException e) {
                     dialog.setMessage("Online master key not found. Creating new....");
                     createMasterKey();
                     Log.d("FILE", "created new master key");
                     try {
-                        FileOutputStream outputStream = openFileOutput(onlineMasterKeyFilename, Context.MODE_PRIVATE);
+                        FileOutputStream onlineOutputStream = openFileOutput(onlineMasterKeyFilename, Context.MODE_PRIVATE);
+                        FileOutputStream offlineOutputStream = openFileOutput(offlineMasterKeyFilename, Context.MODE_PRIVATE);
                         try {
-                            outputStream.write(onlineMasterKey.getEncoded());
+                            onlineOutputStream.write(onlineMasterKey.getEncoded());
+                            offlineOutputStream.write(offlineMasterKey.getEncoded());
                             Log.d("FILE", "saved master key to file");
                         } finally {
-                            outputStream.close();
+                            onlineOutputStream.close();
+                            offlineOutputStream.close();
                         }
                     } catch (IOException e1) {
                         error("Failed to save online master key", e1.getMessage());
@@ -106,6 +119,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                 } catch (Crypto.Exception e) {
                     error("Failed to load online master key from storage.", e.getMessage());
+                    e.printStackTrace();
                 }
                 dialog.dismiss();
             }
@@ -116,6 +130,7 @@ public class MainActivity extends AppCompatActivity {
         try {
             KeyPair masterKey = Crypto.createKey(Crypto.random(32));
             onlineMasterKey = masterKey.getPublic();
+            offlineMasterKey = masterKey.getPrivate();
         } catch (Crypto.Exception e) {
             error("Failed to create master key", e.getMessage());
             e.printStackTrace();
@@ -177,6 +192,7 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     error("Error", (String) new JSONObject(new String(error.networkResponse.data)).get("error"));
                 } catch (JSONException e) {
+                    e.printStackTrace();
                     error("Error", "Server returned status code " + error.networkResponse.statusCode + " but an invalid body.");
                 }
                 error.printStackTrace();
@@ -205,7 +221,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void registerAndLogin(String domain, final byte[] sessionHash) throws Crypto.Exception, JSONException {
         byte[] userId = Crypto.hash(onlineMasterKey.getEncoded(), domain.getBytes());
-        final Account account = new Account(userId, domain, null, true);
+        final Account account = new Account(userId, domain, null, null, null, true);
         accounts.accounts.add(0, account);
         runOnUiThread(new Runnable() {
             @Override
@@ -215,15 +231,18 @@ public class MainActivity extends AppCompatActivity {
         });
 
         byte[] seed = Crypto.random(32);
-        account.keyPair = Crypto.createKey(Crypto.hash(seed));
-        byte[] recoveryCode = Crypto.encrypt(onlineMasterKey, seed);
+        byte[] revocationCode = Crypto.random(32);
+        account.revocationCodeHash = Crypto.hash(revocationCode);
+        account.keyPair = Crypto.createKey(seed);
+        account.recoveryCode = Crypto.encrypt(onlineMasterKey, Crypto.cat(seed, revocationCode));
 
         String url = "https://" + account.domain + "/frango/register";
 
         final JSONObject body = new JSONObject();
         body.put("user_id", Crypto.toBase64(account.userId));
         body.put("public_key", Crypto.toBase64(account.keyPair.getPublic().getEncoded()));
-        body.put("recovery_code", Crypto.toBase64(recoveryCode));
+        body.put("recovery_code", Crypto.toBase64(account.recoveryCode));
+        body.put("revocation_code_hash", Crypto.toBase64(account.revocationCodeHash));
 
         post(url, body, new Response.Listener<String>() {
             @Override
@@ -291,6 +310,28 @@ public class MainActivity extends AppCompatActivity {
         } catch (NoSuchAccountException e) {
             registerAndLogin(domain, sessionHash);
         }
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        // Inflate the menu; this adds items to the action bar if it is present.
+        getMenuInflater().inflate(R.menu.main, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        // Handle action bar item clicks here. The action bar will
+        // automatically handle clicks on the Home/Up button, so long
+        // as you specify a parent activity in AndroidManifest.xml.
+        int id = item.getItemId();
+
+        //noinspection SimplifiableIfStatement
+        if (id == R.id.action_settings) {
+            return true;
+        }
+
+        return super.onOptionsItemSelected(item);
     }
 }
 

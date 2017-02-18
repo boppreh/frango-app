@@ -15,9 +15,8 @@
         android:background="@color/colorPrimary"
         android:fitsSystemWindows="true"
         android:minHeight="?attr/actionBarSize"
-        app:title="Frango"
-        app:titleTextColor="#FFF"
-        />
+        android:theme="@style/AppToolbar"
+        app:title="Frango" />
 
     <LinearLayout
         android:layout_width="match_parent"

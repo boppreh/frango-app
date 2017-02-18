@@ -80,7 +80,6 @@ public class Accounts extends BaseExpandableListAdapter {
                         new AlertDialog.Builder(activity)
                                 .setTitle("Confirm logout")
                                 .setMessage("Logout from this " + account.domain + " session?")
-                                .setIcon(android.R.drawable.ic_dialog_alert)
                                 .setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
                                     public void onClick(DialogInterface dialog, int whichButton) {
                                         session.state = Session.State.REMOVING;
@@ -170,18 +169,27 @@ public class Accounts extends BaseExpandableListAdapter {
                     new AlertDialog.Builder(activity)
                             .setTitle("Confirm account removal")
                             .setMessage("Do you really want to delete your account at " + account.domain + "?")
-                            .setIcon(android.R.drawable.ic_dialog_alert)
                             .setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
                                 public void onClick(DialogInterface dialog, int whichButton) {
                                     JSONObject body = new JSONObject();
                                     try {
                                         body.put("user_id", Crypto.toBase64(account.userId));
+                                        byte[] recovery = Crypto.decrypt(activity.offlineMasterKey, account.recoveryCode);
+                                        List<byte[]> recoveryParts = Crypto.splitAt(recovery, 32);
+                                        byte[] seed = recoveryParts.get(0);
+                                        byte[] revocationCode = recoveryParts.get(1);
+                                        body.put("revocation_code", Crypto.toBase64(revocationCode));
                                     } catch (JSONException e) {
-                                        activity.error("Failed to remove account", e.getMessage());
+                                        activity.error("Failed encode account removal", e.getMessage());
+                                        e.printStackTrace();
+                                        return;
+                                    } catch (Crypto.Exception e) {
+                                        activity.error("Failed to decrypt recovery code", e.getMessage());
                                         e.printStackTrace();
                                         return;
                                     }
-                                    activity.post("https://" + account.domain + "/frango/delete", body, new Response.Listener<String>() {
+
+                                    activity.post("https://" + account.domain + "/frango/revoke", body, new Response.Listener<String>() {
                                         @Override
                                         public void onResponse(String response) {
                                             accounts.remove(account);

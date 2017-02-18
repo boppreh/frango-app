@@ -88,6 +88,16 @@ public class Crypto {
         }
     }
 
+    public static byte[] decrypt(PrivateKey key, byte[] data) throws Exception {
+        try {
+            Cipher cipher = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding");
+            cipher.init(Cipher.DECRYPT_MODE, key);
+            return cipher.doFinal(data);
+        } catch (NoSuchAlgorithmException | NoSuchPaddingException | BadPaddingException | IllegalBlockSizeException | InvalidKeyException e) {
+            throw new Exception("Failed to sign data.", e);
+        }
+    }
+
     public static byte[] cat(byte[]... parts) {
         if (parts.length == 0) {
             return new byte[0];
@@ -157,6 +167,15 @@ public class Crypto {
         }
     }
 
+    public static PrivateKey loadPrivateKey(byte[] encoded) throws Exception {
+        X509EncodedKeySpec keySpec = new X509EncodedKeySpec(encoded);
+        try {
+            return KeyFactory.getInstance("RSA").generatePrivate(keySpec);
+        } catch (InvalidKeySpecException | NoSuchAlgorithmException e) {
+            throw new Exception("Failed to load private RSA key.", e);
+        }
+    }
+
     public static byte[] read(InputStream stream) throws Exception {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         byte[] b = new byte[1024];
@@ -176,6 +195,10 @@ public class Crypto {
 
     public static PublicKey loadPublicKey(InputStream stream) throws Exception {
         return loadPublicKey(read(stream));
+    }
+
+    public static PrivateKey loadPrivateKey(InputStream stream) throws Exception {
+        return loadPrivateKey(read(stream));
     }
 
     public static void listAvailableAlgorithms() {
