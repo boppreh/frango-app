@@ -6,9 +6,7 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AdapterView;
 import android.widget.BaseExpandableListAdapter;
-import android.widget.ExpandableListView;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
@@ -16,14 +14,10 @@ import com.android.volley.Response;
 import com.android.volley.VolleyError;
 import com.boppreh.Crypto;
 
-import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -194,10 +188,10 @@ public class Accounts extends BaseExpandableListAdapter {
                                             profile.accounts.remove(account);
                                             notifyDataSetChanged();
                                             if (account.domain.equals("4mm.org")) {
-                                                Log.d("DELETE", activity.deleteFile(account.getFilename())+"");
+                                                Log.d("DELETE", activity.deleteFile(account.getFilename()) + "");
                                             }
                                         }
-                                    },  new Response.ErrorListener() {
+                                    }, new Response.ErrorListener() {
                                         @Override
                                         public void onErrorResponse(VolleyError error) {
                                             if (error.networkResponse.statusCode == 404) {
@@ -205,7 +199,7 @@ public class Accounts extends BaseExpandableListAdapter {
                                                 profile.accounts.remove(account);
                                                 notifyDataSetChanged();
                                                 if (account.domain.equals("4mm.org")) {
-                                                    Log.d("DELETE", activity.deleteFile(account.getFilename())+"");
+                                                    Log.d("DELETE", activity.deleteFile(account.getFilename()) + "");
                                                 }
                                             } else {
                                                 activity.error("Error on account removal", error.getMessage());

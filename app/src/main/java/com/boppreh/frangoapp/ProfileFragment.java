@@ -20,7 +20,7 @@ public class ProfileFragment extends Fragment {
         View rootView = inflater.inflate(R.layout.profile, container, false);
         Bundle args = getArguments();
         int profileIndex = args.getInt("profile_index");
-        AccountsAdapter adapter = new AccountsAdapter(inflater, ((MainActivity) getActivity()).fragment.profiles.get(profileIndex).accounts);
+        AccountsAdapter adapter = new AccountsAdapter(inflater, ((MainActivity) getActivity()).fragment.profiles.get(profileIndex));
         ((ExpandableListView) rootView.findViewById(R.id.accounts)).setAdapter(adapter);
 
         final IntentIntegrator integrator = new IntentIntegrator((Activity) inflater.getContext());

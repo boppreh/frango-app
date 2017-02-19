@@ -7,16 +7,14 @@ import android.widget.BaseExpandableListAdapter;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
-import java.util.List;
-
 class AccountsAdapter extends BaseExpandableListAdapter {
 
     private LayoutInflater inflater;
-    private List<Account> accounts;
+    private Profile profile;
 
-    AccountsAdapter(LayoutInflater inflater, List<Account> accounts) {
+    AccountsAdapter(LayoutInflater inflater, Profile profile) {
         this.inflater = inflater;
-        this.accounts = accounts;
+        this.profile = profile;
     }
 
     @Override
@@ -50,12 +48,12 @@ class AccountsAdapter extends BaseExpandableListAdapter {
 
     @Override
     public Account getGroup(int groupPosition) {
-        return accounts.get(groupPosition);
+        return profile.accounts.get(groupPosition);
     }
 
     @Override
     public int getGroupCount() {
-        return accounts.size();
+        return profile.accounts.size();
     }
 
     @Override

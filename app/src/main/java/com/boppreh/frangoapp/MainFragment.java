@@ -3,11 +3,6 @@ package com.boppreh.frangoapp;
 import android.app.Fragment;
 import android.os.Bundle;
 
-import com.boppreh.Crypto;
-
-import java.security.KeyPair;
-import java.security.PrivateKey;
-import java.security.PublicKey;
 import java.util.ArrayList;
 import java.util.List;
 
