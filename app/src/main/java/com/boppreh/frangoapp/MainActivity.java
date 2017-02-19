@@ -1,22 +1,21 @@
 package com.boppreh.frangoapp;
 
 import android.app.AlertDialog;
-import android.app.ExpandableListActivity;
-import android.app.ProgressDialog;
-import android.content.Context;
+import android.app.FragmentManager;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.support.design.widget.TabLayout;
+import android.support.v4.view.ViewPager;
+import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
-import android.support.v7.widget.Toolbar;
-import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.View;
-import android.widget.AdapterView;
-import android.widget.Button;
-import android.widget.ExpandableListView;
+import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.TextView;
 
 import com.android.volley.AuthFailureError;
 import com.android.volley.Request;
@@ -26,121 +25,71 @@ import com.android.volley.VolleyError;
 import com.android.volley.toolbox.StringRequest;
 import com.android.volley.toolbox.Volley;
 import com.boppreh.Crypto;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.MultiFormatWriter;
+import com.google.zxing.WriterException;
+import com.google.zxing.common.BitMatrix;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.security.KeyPair;
-import java.security.PrivateKey;
-import java.security.PublicKey;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
+import static android.graphics.Color.BLACK;
+import static android.graphics.Color.WHITE;
+
 public class MainActivity extends AppCompatActivity {
+
+    private static final String TAG_RETAINED_FRAGMENT = "RetainedFragment";
 
     public static final int SESSION_HASH_SIZE = 32;
 
-    PublicKey onlineMasterKey;
-    PrivateKey offlineMasterKey;
-    Accounts accounts;
+    public static MainActivity instance;
+
+    MainFragment fragment;
+
+    private ViewPager pager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-
-        accounts = new Accounts(this);
-        try {
-            accounts.accounts.add(Account.load(this, "4mma.org"));
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        instance = this;
 
         setContentView(R.layout.activity_main);
 
-        ((ExpandableListView) findViewById(R.id.accounts)).setAdapter(accounts);
-
-        setSupportActionBar((Toolbar) findViewById(R.id.toolbar));
-
-        final IntentIntegrator integrator = new IntentIntegrator(this);
-        Button clickButton = (Button) findViewById(R.id.scan);
-        clickButton.setOnClickListener(new View.OnClickListener()
-
-                                       {
-                                           @Override
-                                           public void onClick(View v) {
-                                               integrator.initiateScan();
-                                           }
-                                       }
-
-        );
-
-        createMasterKey();
-    }
-
-    private void loadMasterKey() {
-        final ProgressDialog dialog = ProgressDialog.show(this, "", "Checking online master key...", false);
-        new
-
-                Thread(new Runnable() {
-            @Override
-            public void run() {
-                String onlineMasterKeyFilename = "online_master_key.der";
-                String offlineMasterKeyFilename = "offline_master_key.der";
-                try {
-                    onlineMasterKey = Crypto.loadPublicKey(openFileInput(onlineMasterKeyFilename));
-                    offlineMasterKey = Crypto.loadPrivateKey(openFileInput(offlineMasterKeyFilename));
-                    Log.d("FILE", "loaded master key from file");
-                } catch (FileNotFoundException e) {
-                    dialog.setMessage("Online master key not found. Creating new....");
-                    createMasterKey();
-                    Log.d("FILE", "created new master key");
-                    try {
-                        FileOutputStream onlineOutputStream = openFileOutput(onlineMasterKeyFilename, Context.MODE_PRIVATE);
-                        FileOutputStream offlineOutputStream = openFileOutput(offlineMasterKeyFilename, Context.MODE_PRIVATE);
-                        try {
-                            onlineOutputStream.write(onlineMasterKey.getEncoded());
-                            offlineOutputStream.write(offlineMasterKey.getEncoded());
-                            Log.d("FILE", "saved master key to file");
-                        } finally {
-                            onlineOutputStream.close();
-                            offlineOutputStream.close();
-                        }
-                    } catch (IOException e1) {
-                        error("Failed to save online master key", e1.getMessage());
-                        e1.printStackTrace();
-                    }
-                } catch (Crypto.Exception e) {
-                    error("Failed to load online master key from storage.", e.getMessage());
-                    e.printStackTrace();
-                }
-                dialog.dismiss();
-            }
-        }).start();
-    }
-
-    private void createMasterKey() {
-        try {
-            KeyPair masterKey = Crypto.createKey(Crypto.random(32));
-            onlineMasterKey = masterKey.getPublic();
-            offlineMasterKey = masterKey.getPrivate();
-        } catch (Crypto.Exception e) {
-            error("Failed to create master key", e.getMessage());
-            e.printStackTrace();
+        ActionBar bar = getSupportActionBar();
+        if (bar != null) {
+            bar.setTitle("Frango");
         }
+
+        FragmentManager fm = getFragmentManager();
+        fragment = (MainFragment) fm.findFragmentByTag(TAG_RETAINED_FRAGMENT);
+        if (fragment == null) {
+            fragment = new MainFragment();
+            fm.beginTransaction().add(fragment, TAG_RETAINED_FRAGMENT).commit();
+        }
+
+        ProfilesAdapter adapter = new ProfilesAdapter(getSupportFragmentManager());
+        pager = (ViewPager) findViewById(R.id.pager);
+        pager.setAdapter(adapter);
+        ((TabLayout) findViewById(R.id.tabs)).setupWithViewPager(pager, true);
     }
 
     public void onActivityResult(int requestCode, int resultCode, Intent intent) {
         IntentResult scanResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, intent);
         if (scanResult != null) {
             final byte[] data = scanResult.getDataBytes();
+            if (data == null || data.length == 0) {
+                return;
+            }
+
             (new AsyncTask<Void, Integer, Void>() {
                 @Override
                 protected Void doInBackground(Void... params) {
@@ -172,15 +121,6 @@ public class MainActivity extends AppCompatActivity {
                             }
                         })
                         .show();
-            }
-        });
-    }
-
-    private void post(String url, final JSONObject body) {
-        post(url, body, new Response.Listener<String>() {
-            @Override
-            public void onResponse(String response) {
-                // Ok.
             }
         });
     }
@@ -220,21 +160,22 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void registerAndLogin(String domain, final byte[] sessionHash) throws Crypto.Exception, JSONException {
-        byte[] userId = Crypto.hash(onlineMasterKey.getEncoded(), domain.getBytes());
+        Profile profile = fragment.profiles.get(pager.getCurrentItem());
+        byte[] userId = Crypto.hash(profile.onlineMasterKey.getEncoded(), domain.getBytes());
         final Account account = new Account(userId, domain, null, null, null, true);
-        accounts.accounts.add(0, account);
+        profile.accounts.add(0, account);
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                accounts.notifyDataSetChanged();
+                pager.getAdapter().notifyDataSetChanged();
             }
         });
 
         byte[] seed = Crypto.random(32);
         byte[] revocationCode = Crypto.random(32);
         account.revocationCodeHash = Crypto.hash(revocationCode);
-        account.keyPair = Crypto.createKey(seed);
-        account.recoveryCode = Crypto.encrypt(onlineMasterKey, Crypto.cat(seed, revocationCode));
+        account.keyPair = Crypto.createSigningKey(domain, seed);
+        account.recoveryCode = Crypto.encrypt(profile.onlineMasterKey, Crypto.cat(revocationCode, seed));
 
         String url = "https://" + account.domain + "/frango/register";
 
@@ -249,7 +190,7 @@ public class MainActivity extends AppCompatActivity {
             public void onResponse(String response) {
                 try {
                     account.isLoading = false;
-                    accounts.notifyDataSetChanged();
+                    pager.getAdapter().notifyDataSetChanged();
                     login(account, sessionHash);
                 } catch (JSONException e) {
                     error("Server replied with invalid data", e.getMessage());
@@ -278,7 +219,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onResponse(String response) {
                 session.state = Session.State.CREATED;
-                accounts.notifyDataSetChanged();
+                pager.getAdapter().notifyDataSetChanged();
                 try {
                     account.save(MainActivity.this);
                 } catch (IOException | JSONException e) {
@@ -289,7 +230,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private Account getAccount(String domain) throws NoSuchAccountException {
-        for (Account account : accounts.accounts) {
+        for (Account account : fragment.profiles.get(pager.getCurrentItem()).accounts) {
             if (account.domain.equals(domain)) {
                 return account;
             }
@@ -314,7 +255,6 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.main, menu);
         return true;
     }
@@ -326,8 +266,89 @@ public class MainActivity extends AppCompatActivity {
         // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
 
-        //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
+        if (id == R.id.action_create_profile) {
+            final Profile profile = new Profile("", new ArrayList<Account>());
+
+            final AlertDialog dialog = new AlertDialog.Builder(this)
+                    .setTitle("Profile creation")
+                    .setPositiveButton("Finish", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            EditText nameField = (EditText) ((AlertDialog) dialog).findViewById(R.id.name);
+
+                            if (nameField.getText().length() == 0) {
+                                profile.name = nameField.getHint().toString();
+                            } else {
+                                profile.name = nameField.getText().toString();
+                            }
+                            fragment.profiles.add(profile);
+                            pager.getAdapter().notifyDataSetChanged();
+                        }
+                    })
+                    .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            dialog.cancel();
+                        }
+                    })
+                    .setView(R.layout.profile_creation)
+                    .create();
+
+            dialog.show();
+
+            final ImageView imageView = (ImageView) dialog.findViewById(R.id.offline_code);
+            final int side = Math.min(imageView.getDrawable().getIntrinsicWidth(), imageView.getDrawable().getIntrinsicHeight());
+
+            ((TextView) dialog.findViewById(R.id.description)).setText("Generating key...");
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
+
+            (new AsyncTask<Void, Integer, Void>() {
+                @Override
+                protected Void doInBackground(Void... params) {
+                    byte[] seed = Crypto.random(32);
+                    KeyPair keyPair = null;
+                    try {
+                        keyPair = Crypto.createSigningKey("master key", seed);
+                    } catch (Crypto.Exception e) {
+                        dialog.cancel();
+                        error("Failed to create new master key pair", e.getMessage());
+                        return null;
+                    }
+                    profile.onlineMasterKey = keyPair.getPublic();
+                    profile.offlineMasterKey = keyPair.getPrivate();
+
+                    BitMatrix result;
+                    try {
+                        result = new MultiFormatWriter().encode(Crypto.toBase64(seed),
+                                BarcodeFormat.QR_CODE, side, side, null);
+                    } catch (WriterException e) {
+                        dialog.cancel();
+                        error("Failed to create QR code with backup codes", e.getMessage());
+                        return null;
+                    }
+                    int w = result.getWidth();
+                    int h = result.getHeight();
+                    int[] pixels = new int[w * h];
+                    for (int y = 0; y < h; y++) {
+                        int offset = y * w;
+                        for (int x = 0; x < w; x++) {
+                            pixels[offset + x] = result.get(x, y) ? BLACK : WHITE;
+                        }
+                    }
+                    final Bitmap bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+                    bitmap.setPixels(pixels, 0, w, 0, 0, w, h);
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            imageView.setImageBitmap(bitmap);
+                            ((TextView) dialog.findViewById(R.id.description)).setText("The QR code below is your Offline Master Key, and is necessary if you ever need to recover access to your accounts. Copy it somewhere safe.");
+                            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);
+                        }
+                    });
+                    return null;
+                }
+            }).execute();
+
             return true;
         }
 
@@ -336,7 +357,7 @@ public class MainActivity extends AppCompatActivity {
 }
 
 class NoSuchAccountException extends Exception {
-    public NoSuchAccountException(String domain) {
+    NoSuchAccountException(String domain) {
         super("No account for domain " + domain);
     }
 }

@@ -33,12 +33,11 @@ public class Accounts extends BaseExpandableListAdapter {
 
     LayoutInflater inflater;
     MainActivity activity;
-    List<Account> accounts;
+    Profile profile;
 
     public Accounts(MainActivity activity) {
         this.inflater = LayoutInflater.from(activity);
         this.activity = activity;
-        this.accounts = new ArrayList<>();
     }
 
     @Override
@@ -140,12 +139,12 @@ public class Accounts extends BaseExpandableListAdapter {
 
     @Override
     public Account getGroup(int groupPosition) {
-        return accounts.get(groupPosition);
+        return profile.accounts.get(groupPosition);
     }
 
     @Override
     public int getGroupCount() {
-        return accounts.size();
+        return profile.accounts.size();
     }
 
     @Override
@@ -174,7 +173,7 @@ public class Accounts extends BaseExpandableListAdapter {
                                     JSONObject body = new JSONObject();
                                     try {
                                         body.put("user_id", Crypto.toBase64(account.userId));
-                                        byte[] recovery = Crypto.decrypt(activity.offlineMasterKey, account.recoveryCode);
+                                        byte[] recovery = Crypto.decrypt(profile.offlineMasterKey, account.recoveryCode);
                                         List<byte[]> recoveryParts = Crypto.splitAt(recovery, 32);
                                         byte[] seed = recoveryParts.get(0);
                                         byte[] revocationCode = recoveryParts.get(1);
@@ -192,7 +191,7 @@ public class Accounts extends BaseExpandableListAdapter {
                                     activity.post("https://" + account.domain + "/frango/revoke", body, new Response.Listener<String>() {
                                         @Override
                                         public void onResponse(String response) {
-                                            accounts.remove(account);
+                                            profile.accounts.remove(account);
                                             notifyDataSetChanged();
                                             if (account.domain.equals("4mm.org")) {
                                                 Log.d("DELETE", activity.deleteFile(account.getFilename())+"");
@@ -203,7 +202,7 @@ public class Accounts extends BaseExpandableListAdapter {
                                         public void onErrorResponse(VolleyError error) {
                                             if (error.networkResponse.statusCode == 404) {
                                                 activity.error("Invalid account", "The account doesn't exist anymore. It'll be removed from the list.");
-                                                accounts.remove(account);
+                                                profile.accounts.remove(account);
                                                 notifyDataSetChanged();
                                                 if (account.domain.equals("4mm.org")) {
                                                     Log.d("DELETE", activity.deleteFile(account.getFilename())+"");
