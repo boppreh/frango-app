@@ -109,7 +109,6 @@ import java.util.Map;
  */
 public class IntentIntegrator {
 
-    public static final int REQUEST_CODE = 0x0000c0de; // Only use bottom 16 bits
     private static final String TAG = IntentIntegrator.class.getSimpleName();
 
     public static final String DEFAULT_TITLE = "Install Barcode Scanner?";
@@ -148,13 +147,18 @@ public class IntentIntegrator {
     private String buttonNo;
     private List<String> targetApplications;
     private final Map<String,Object> moreExtras = new HashMap<String,Object>(3);
+    private int requestCode;
+    private int profileIndex;
 
     /**
      * @param activity {@link Activity} invoking the integration
+     * @param profileIndex
      */
-    public IntentIntegrator(Activity activity) {
+    public IntentIntegrator(Activity activity, int requestCode, int profileIndex) {
         this.activity = activity;
         this.fragment = null;
+        this.requestCode = requestCode;
+        this.profileIndex = profileIndex;
         initializeConfiguration();
     }
 
@@ -322,7 +326,8 @@ public class IntentIntegrator {
         intentScan.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
         intentScan.addFlags(Intent.FLAG_ACTIVITY_CLEAR_WHEN_TASK_RESET);
         attachMoreExtras(intentScan);
-        startActivityForResult(intentScan, REQUEST_CODE);
+        intentScan.putExtra("profile_index", this.profileIndex);
+        startActivityForResult(intentScan, this.requestCode);
         return null;
     }
 
@@ -399,41 +404,6 @@ public class IntentIntegrator {
         downloadDialog.setCancelable(true);
         return downloadDialog.show();
     }
-
-
-    /**
-     * <p>Call this from your {@link Activity}'s
-     * {@link Activity#onActivityResult(int, int, Intent)} method.</p>
-     *
-     * @param requestCode request code from {@code onActivityResult()}
-     * @param resultCode result code from {@code onActivityResult()}
-     * @param intent {@link Intent} from {@code onActivityResult()}
-     * @return null if the event handled here was not related to this class, or
-     *  else an {@link IntentResult} containing the result of the scan. If the user cancelled scanning,
-     *  the fields will be null.
-     */
-    public static IntentResult parseActivityResult(int requestCode, int resultCode, Intent intent) {
-        if (requestCode == REQUEST_CODE) {
-            if (resultCode == Activity.RESULT_OK) {
-                String contents = intent.getStringExtra("SCAN_RESULT");
-                String formatName = intent.getStringExtra("SCAN_RESULT_FORMAT");
-                byte[] rawBytes = intent.getByteArrayExtra("SCAN_RESULT_BYTES");
-                int intentOrientation = intent.getIntExtra("SCAN_RESULT_ORIENTATION", Integer.MIN_VALUE);
-                Integer orientation = intentOrientation == Integer.MIN_VALUE ? null : intentOrientation;
-                String errorCorrectionLevel = intent.getStringExtra("SCAN_RESULT_ERROR_CORRECTION_LEVEL");
-                byte[] dataBytes = intent.getByteArrayExtra("SCAN_RESULT_BYTE_SEGMENTS_0");
-                return new IntentResult(contents,
-                        formatName,
-                        rawBytes,
-                        orientation,
-                        errorCorrectionLevel,
-                        dataBytes);
-            }
-            return new IntentResult();
-        }
-        return null;
-    }
-
 
     /**
      * Defaults to type "TEXT_TYPE".

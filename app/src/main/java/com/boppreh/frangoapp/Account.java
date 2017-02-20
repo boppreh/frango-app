@@ -32,20 +32,18 @@ public class Account {
     public List<Session> sessions;
     public byte[] recoveryCode;
     public byte[] revocationCodeHash;
-    public boolean isLoading;
 
-    public Account(byte[] userId, String domain, KeyPair keyPair, byte[] recoveryCode, byte[] revocationCodeHash, boolean isLoading) {
-        this(userId, domain, keyPair, recoveryCode, revocationCodeHash, isLoading, new ArrayList<Session>());
+    public Account(byte[] userId, String domain, KeyPair keyPair, byte[] recoveryCode, byte[] revocationCodeHash) {
+        this(userId, domain, keyPair, recoveryCode, revocationCodeHash, new ArrayList<Session>());
     }
 
-    public Account(byte[] userId, String domain, KeyPair keyPair, byte[] recoveryCode, byte[] revocationCodeHash, boolean isLoading, List<Session> sessions) {
+    public Account(byte[] userId, String domain, KeyPair keyPair, byte[] recoveryCode, byte[] revocationCodeHash, List<Session> sessions) {
         this.userId = userId;
         this.domain = domain;
         this.keyPair = keyPair;
         this.recoveryCode = recoveryCode;
         this.revocationCodeHash = revocationCodeHash;
         this.sessions = sessions;
-        this.isLoading = isLoading;
     }
 
     public JSONObject marshall() throws JSONException {
@@ -98,7 +96,7 @@ public class Account {
         ObjectInputStream objectStream = new ObjectInputStream(inputStream);
         KeyPair keyPair = (KeyPair) objectStream.readObject();
 
-        return new Account(userId, domain, keyPair, recoveryCode, revocationCodeHash, false, sessions);
+        return new Account(userId, domain, keyPair, recoveryCode, revocationCodeHash, sessions);
     }
 
     public String getFilename() {

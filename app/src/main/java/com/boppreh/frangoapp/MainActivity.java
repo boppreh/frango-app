@@ -1,5 +1,6 @@
 package com.boppreh.frangoapp;
 
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.FragmentManager;
 import android.content.DialogInterface;
@@ -50,6 +51,8 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG_RETAINED_FRAGMENT = "RetainedFragment";
 
     public static final int SESSION_HASH_SIZE = 32;
+    public static final int SCAN_ACCOUNT_LOGIN = 0x0000fe39;
+    public static final int SCAN_PROFILE_IMPORT = 0x0000fe38;
 
     public static MainActivity instance;
 
@@ -83,10 +86,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void onActivityResult(int requestCode, int resultCode, Intent intent) {
-        IntentResult scanResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, intent);
-        if (scanResult != null) {
-            final byte[] data = scanResult.getDataBytes();
-            if (data == null || data.length == 0) {
+        if (requestCode == SCAN_ACCOUNT_LOGIN) {
+            final byte[] data = intent.getByteArrayExtra("SCAN_RESULT_BYTE_SEGMENTS_0");
+            final int profileIndex = intent.getIntExtra("profile_index", -1);
+            if (data == null || data.length == 0 || profileIndex == -1) {
                 return;
             }
 
@@ -94,7 +97,7 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 protected Void doInBackground(Void... params) {
                     try {
-                        initiateLogin(data);
+                        initiateLogin(data, fragment.profiles.get(profileIndex));
                     } catch (UnsupportedEncodingException e) {
                         error("Invalid QR code", "The scanned QR code contained an invalid domain (non-UTF-8).");
                         e.printStackTrace();
@@ -159,10 +162,8 @@ public class MainActivity extends AppCompatActivity {
         queue.add(stringRequest);
     }
 
-    private void registerAndLogin(String domain, final byte[] sessionHash) throws Crypto.Exception, JSONException {
-        Profile profile = fragment.profiles.get(pager.getCurrentItem());
-        byte[] userId = Crypto.hash(profile.onlineMasterKey.getEncoded(), domain.getBytes());
-        final Account account = new Account(userId, domain, null, null, null, true);
+    private void registerAndLogin(Profile profile, String domain, final byte[] sessionHash) throws Crypto.Exception, JSONException {
+        final Account account = new Account(profile.userIdFor(domain), domain, null, null, null);
         profile.accounts.add(0, account);
         runOnUiThread(new Runnable() {
             @Override
@@ -189,7 +190,6 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onResponse(String response) {
                 try {
-                    account.isLoading = false;
                     pager.getAdapter().notifyDataSetChanged();
                     login(account, sessionHash);
                 } catch (JSONException e) {
@@ -229,8 +229,8 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private Account getAccount(String domain) throws NoSuchAccountException {
-        for (Account account : fragment.profiles.get(pager.getCurrentItem()).accounts) {
+    private Account getAccount(Profile profile, String domain) throws NoSuchAccountException {
+        for (Account account : profile.accounts) {
             if (account.domain.equals(domain)) {
                 return account;
             }
@@ -238,7 +238,7 @@ public class MainActivity extends AppCompatActivity {
         throw new NoSuchAccountException(domain);
     }
 
-    private void initiateLogin(byte[] qrCodeData) throws UnsupportedEncodingException, Crypto.Exception, JSONException {
+    private void initiateLogin(byte[] qrCodeData, Profile profile) throws UnsupportedEncodingException, Crypto.Exception, JSONException {
         List<byte[]> parts = Crypto.splitAt(qrCodeData, SESSION_HASH_SIZE);
         byte[] sessionHash = parts.get(0);
         byte[] domainBytes = parts.get(1);
@@ -246,10 +246,10 @@ public class MainActivity extends AppCompatActivity {
         final String domain = new String(domainBytes, "UTF-8");
 
         try {
-            Account account = getAccount(domain);
+            Account account = getAccount(profile, domain);
             login(account, sessionHash);
         } catch (NoSuchAccountException e) {
-            registerAndLogin(domain, sessionHash);
+            registerAndLogin(profile, domain, sessionHash);
         }
     }
 
@@ -341,7 +341,7 @@ public class MainActivity extends AppCompatActivity {
                         @Override
                         public void run() {
                             imageView.setImageBitmap(bitmap);
-                            ((TextView) dialog.findViewById(R.id.description)).setText("The QR code below is your Offline Master Key, and is necessary if you ever need to recover access to your accounts. Copy it somewhere safe.");
+                            ((TextView) dialog.findViewById(R.id.description)).setText("The QR code below is your Offline Master Key. If you ever lose your phone, you will need it to recover your accounts. Copy it somewhere safe.");
                             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);
                         }
                     });
@@ -350,6 +350,9 @@ public class MainActivity extends AppCompatActivity {
             }).execute();
 
             return true;
+        } else if (id == R.id.action_import) {
+            final IntentIntegrator integrator = new IntentIntegrator(this, MainActivity.SCAN_PROFILE_IMPORT, -1);
+            integrator.initiateScan();
         }
 
         return super.onOptionsItemSelected(item);

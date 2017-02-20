@@ -213,11 +213,7 @@ public class Accounts extends BaseExpandableListAdapter {
             });
         }
 
-        if (account.isLoading) {
-            ((TextView) view.findViewById(R.id.n_sessions)).setText("registering....");
-        } else {
-            ((TextView) view.findViewById(R.id.n_sessions)).setText(account.sessions.size() + " sessions");
-        }
+        ((TextView) view.findViewById(R.id.n_sessions)).setText(account.sessions.size() + " sessions");
 
         return view;
     }

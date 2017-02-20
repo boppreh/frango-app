@@ -91,13 +91,13 @@ public class Crypto {
     private static SecureRandom secureRandom = new SecureRandom();
 
     @SuppressWarnings({"unused", "WeakerAccess"})
-    public static byte[] hash(byte[]... dataParts) throws Exception {
+    public static byte[] hash(byte[]... dataParts) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA256");
             digest.update(cat(dataParts));
             return digest.digest();
         } catch (NoSuchAlgorithmException e) {
-            throw new AlgorithmException("Failed to hash data.", e);
+            throw new RuntimeException("Failed to hash data.", e);
         }
     }
 
