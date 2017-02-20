@@ -2,7 +2,10 @@ package com.boppreh.frangoapp;
 
 import android.app.Activity;
 import android.content.Context;
+import android.util.Log;
 
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
 import com.boppreh.Crypto;
 
 import org.json.JSONArray;
@@ -17,12 +20,13 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.security.KeyPair;
+import java.security.PrivateKey;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
-public class Account {
+public class Account implements IAccount {
     public byte[] userId;
     public String domain;
     public KeyPair keyPair;
@@ -108,5 +112,135 @@ public class Account {
     public static Account load(Activity activity, String domain) throws IOException, Crypto.Exception, ClassNotFoundException, ParseException, JSONException {
         FileInputStream stream = activity.openFileInput("account_" + Crypto.toBase64(domain) + ".json");
         return unmarshall(new String(Crypto.read(stream)));
+    }
+
+    @Override
+    public String getName() {
+        return domain;
+    }
+
+    @Override
+    public String getSubtitle() {
+        return sessions.size() + " sessions";
+    }
+
+    @Override
+    public List<Session> getSessions() {
+        return sessions;
+    }
+
+    public void remove(PrivateKey offlineMasterKey, final MainActivity activity, final RemovalCallback callback) {
+        JSONObject body = new JSONObject();
+        try {
+            body.put("user_id", Crypto.toBase64(userId));
+            byte[] recovery = Crypto.decrypt(offlineMasterKey, recoveryCode);
+            List<byte[]> recoveryParts = Crypto.splitAt(recovery, 32);
+            byte[] seed = recoveryParts.get(0);
+            byte[] revocationCode = recoveryParts.get(1);
+            body.put("revocation_code", Crypto.toBase64(revocationCode));
+        } catch (JSONException e) {
+            activity.error("Failed encode account removal", e.getMessage());
+            e.printStackTrace();
+            return;
+        } catch (Crypto.Exception e) {
+            activity.error("Failed to decrypt recovery code", e.getMessage());
+            e.printStackTrace();
+            return;
+        }
+
+        activity.post("https://" + domain + "/frango/revoke", body, new Response.Listener<String>() {
+            @Override
+            public void onResponse(String response) {
+                callback.removeAndNotify(Account.this);
+                activity.deleteFile(getFilename());
+            }
+        }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+                if (error.networkResponse.statusCode == 404) {
+                    activity.error("Invalid account", "The account doesn't exist anymore. It'll be removed from the list.");
+                    callback.removeAndNotify(Account.this);
+                    activity.deleteFile(getFilename());
+                } else {
+                    activity.error("Error on account removal", error.getMessage());
+                }
+            }
+        });
+    }
+
+    @Override
+    public void logout(final Session session, final MainActivity activity, final Notify callback) {
+        JSONObject body = new JSONObject();
+        String url = "https://" + domain + "/frango/logout";
+        try {
+            body.put("user_id", Crypto.toBase64(userId));
+            body.put("session_hash", Crypto.toBase64(session.sessionHash));
+            body.put("signature", Crypto.toBase64(Crypto.sign(keyPair.getPrivate(), session.sessionHash)));
+        } catch (Crypto.Exception | JSONException e) {
+            activity.error("Error on logout", e.getMessage());
+            e.printStackTrace();
+            return;
+        }
+
+        activity.post(url, body, new Response.Listener<String>() {
+            @Override
+            public void onResponse(String response) {
+                sessions.remove(session);
+                callback.notifyUpdate(Account.this);
+                try {
+                    save(activity);
+                } catch (IOException | JSONException e) {
+                    activity.error("Failed to persist changes", e.getMessage());
+                }
+            }
+        }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+                if (error.networkResponse.statusCode == 404) {
+                    activity.error("Invalid session", "The session doesn't exist anymore. It'll be removed from the list.");
+                    Log.d("SESSIONS", session.getIso8601());
+                    sessions.remove(session);
+                    callback.notifyUpdate(Account.this);
+                    try {
+                        save(activity);
+                    } catch (IOException | JSONException e) {
+                        activity.error("Failed to persist changes", e.getMessage());
+                    }
+                } else {
+                    activity.error("Error on log out", error.getMessage());
+                }
+            }
+        });
+    }
+
+    public void login(final MainActivity activity, byte[] sessionHash, final Notify callback) {
+        String url = "https://" + domain + "/frango/login";
+
+        final JSONObject body;
+        try {
+            body = new JSONObject();
+            body.put("user_id", Crypto.toBase64(userId));
+            body.put("session_hash", Crypto.toBase64(sessionHash));
+            body.put("signature", Crypto.toBase64(Crypto.sign(keyPair.getPrivate(), sessionHash)));
+        } catch (Crypto.AlgorithmException | JSONException |Crypto.KeyStoreUnavailableException e) {
+            activity.error("Failed to login", e.getMessage());
+            return;
+        }
+
+        final Session session = new Session(new Date(), sessionHash);
+        sessions.add(0, session);
+
+        activity.post(url, body, new Response.Listener<String>() {
+
+            @Override
+            public void onResponse(String response) {
+                callback.notifyUpdate(Account.this);
+                try {
+                    save(activity);
+                } catch (IOException | JSONException e) {
+                    activity.error("Failed to persist changes", e.getMessage());
+                }
+            }
+        });
     }
 }

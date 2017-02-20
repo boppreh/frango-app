@@ -24,7 +24,7 @@ public class ProfileFragment extends Fragment {
         ((ExpandableListView) rootView.findViewById(R.id.accounts)).setAdapter(adapter);
 
         Button clickButton = (Button) rootView.findViewById(R.id.scan);
-        final IntentIntegrator integrator = new IntentIntegrator(((MainActivity) getActivity()), MainActivity.SCAN_ACCOUNT_LOGIN);
+        final IntentIntegrator integrator = new IntentIntegrator(getActivity(), MainActivity.SCAN_ACCOUNT_LOGIN);
         Log.d("profile index", profileIndex+"");
         clickButton.setOnClickListener(new View.OnClickListener() {
                                            @Override

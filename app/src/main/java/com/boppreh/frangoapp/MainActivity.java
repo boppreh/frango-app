@@ -1,6 +1,7 @@
 package com.boppreh.frangoapp;
 
 import android.app.AlertDialog;
+import android.app.Dialog;
 import android.app.FragmentManager;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -112,8 +113,7 @@ public class MainActivity extends AppCompatActivity {
                         public void onClick(DialogInterface dialog, int which) {
                             try {
                                 try {
-                                    Account account = getAccount(profile, domain);
-                                    login(account, sessionHash);
+                                    login(getAccount(profile, domain), sessionHash);
                                 } catch (NoSuchAccountException e) {
                                     registerAndLogin(profile, domain, sessionHash);
                                 }
@@ -220,35 +220,18 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void login(final Account account, final byte[] sessionHash) throws JSONException, Crypto.Exception {
-        String url = "https://" + account.domain + "/frango/login";
-
-        final JSONObject body = new JSONObject();
-        body.put("user_id", Crypto.toBase64(account.userId));
-        body.put("session_hash", Crypto.toBase64(sessionHash));
-        body.put("signature", Crypto.toBase64(Crypto.sign(account.keyPair.getPrivate(), sessionHash)));
-
-        final Session session = new Session(new Date(), sessionHash, Session.State.CREATING);
-        account.sessions.add(0, session);
-
-        post(url, body, new Response.Listener<String>() {
-
+    private void login(final IAccount account, final byte[] sessionHash) throws JSONException, Crypto.Exception {
+        account.login(this, sessionHash, new IAccount.Notify() {
             @Override
-            public void onResponse(String response) {
-                session.state = Session.State.CREATED;
+            public void notifyUpdate(IAccount account) {
                 pager.getAdapter().notifyDataSetChanged();
-                try {
-                    account.save(MainActivity.this);
-                } catch (IOException | JSONException e) {
-                    error("Failed to persist changes", e.getMessage());
-                }
             }
         });
     }
 
-    private Account getAccount(Profile profile, String domain) throws NoSuchAccountException {
-        for (Account account : profile.accounts) {
-            if (account.domain.equals(domain)) {
+    private IAccount getAccount(Profile profile, String domain) throws NoSuchAccountException {
+        for (IAccount account : profile.accounts) {
+            if (account.getName().equals(domain)) {
                 return account;
             }
         }
@@ -269,14 +252,14 @@ public class MainActivity extends AppCompatActivity {
         int id = item.getItemId();
 
         if (id == R.id.action_create_profile) {
-            final Profile profile = new Profile("", new ArrayList<Account>());
+            final Profile profile = new Profile("", new ArrayList<IAccount>());
 
             final AlertDialog dialog = new AlertDialog.Builder(this)
                     .setTitle("Profile creation")
                     .setPositiveButton("Finish", new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
-                            EditText nameField = (EditText) ((AlertDialog) dialog).findViewById(R.id.name);
+                            EditText nameField = (EditText) ((Dialog) dialog).findViewById(R.id.name);
 
                             if (nameField.getText().length() == 0) {
                                 profile.name = nameField.getHint().toString();
@@ -308,16 +291,15 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 protected Void doInBackground(Void... params) {
                     byte[] seed = Crypto.random(32);
-                    KeyPair keyPair = null;
                     try {
-                        keyPair = Crypto.createSigningKey("master key", seed);
+                        KeyPair keyPair = Crypto.createSigningKey("master key", seed);
+                        profile.onlineMasterKey = keyPair.getPublic();
+                        profile.offlineMasterKey = keyPair.getPrivate();
                     } catch (Crypto.Exception e) {
                         dialog.cancel();
                         error("Failed to create new master key pair", e.getMessage());
                         return null;
                     }
-                    profile.onlineMasterKey = keyPair.getPublic();
-                    profile.offlineMasterKey = keyPair.getPrivate();
 
                     BitMatrix result;
                     try {

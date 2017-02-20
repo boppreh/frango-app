@@ -8,11 +8,11 @@ import java.util.List;
 
 class Profile {
     public CharSequence name;
-    public List<Account> accounts;
+    public List<IAccount> accounts;
     public PrivateKey offlineMasterKey;
     public PublicKey onlineMasterKey;
 
-    Profile(CharSequence name, List<Account> accounts) {
+    Profile(CharSequence name, List<IAccount> accounts) {
         this.name = name;
         this.accounts = accounts;
     }
