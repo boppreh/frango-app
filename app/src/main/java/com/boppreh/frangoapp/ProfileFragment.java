@@ -3,6 +3,7 @@ package com.boppreh.frangoapp;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -23,7 +24,8 @@ public class ProfileFragment extends Fragment {
         ((ExpandableListView) rootView.findViewById(R.id.accounts)).setAdapter(adapter);
 
         Button clickButton = (Button) rootView.findViewById(R.id.scan);
-        final IntentIntegrator integrator = new IntentIntegrator(((MainActivity) getActivity()), MainActivity.SCAN_ACCOUNT_LOGIN, profileIndex);
+        final IntentIntegrator integrator = new IntentIntegrator(((MainActivity) getActivity()), MainActivity.SCAN_ACCOUNT_LOGIN);
+        Log.d("profile index", profileIndex+"");
         clickButton.setOnClickListener(new View.OnClickListener() {
                                            @Override
                                            public void onClick(View v) {

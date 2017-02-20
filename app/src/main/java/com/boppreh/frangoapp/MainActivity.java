@@ -1,6 +1,5 @@
 package com.boppreh.frangoapp;
 
-import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.FragmentManager;
 import android.content.DialogInterface;
@@ -12,6 +11,7 @@ import android.support.design.widget.TabLayout;
 import android.support.v4.view.ViewPager;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.EditText;
@@ -31,7 +31,6 @@ import com.google.zxing.MultiFormatWriter;
 import com.google.zxing.WriterException;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.integration.android.IntentIntegrator;
-import com.google.zxing.integration.android.IntentResult;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -54,8 +53,6 @@ public class MainActivity extends AppCompatActivity {
     public static final int SCAN_ACCOUNT_LOGIN = 0x0000fe39;
     public static final int SCAN_PROFILE_IMPORT = 0x0000fe38;
 
-    public static MainActivity instance;
-
     MainFragment fragment;
 
     private ViewPager pager;
@@ -63,7 +60,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        instance = this;
 
         setContentView(R.layout.activity_main);
 
@@ -79,7 +75,7 @@ public class MainActivity extends AppCompatActivity {
             fm.beginTransaction().add(fragment, TAG_RETAINED_FRAGMENT).commit();
         }
 
-        ProfilesAdapter adapter = new ProfilesAdapter(getSupportFragmentManager());
+        ProfilesAdapter adapter = new ProfilesAdapter(this, getSupportFragmentManager());
         pager = (ViewPager) findViewById(R.id.pager);
         pager.setAdapter(adapter);
         ((TabLayout) findViewById(R.id.tabs)).setupWithViewPager(pager, true);
@@ -88,26 +84,52 @@ public class MainActivity extends AppCompatActivity {
     public void onActivityResult(int requestCode, int resultCode, Intent intent) {
         if (requestCode == SCAN_ACCOUNT_LOGIN) {
             final byte[] data = intent.getByteArrayExtra("SCAN_RESULT_BYTE_SEGMENTS_0");
-            final int profileIndex = intent.getIntExtra("profile_index", -1);
-            if (data == null || data.length == 0 || profileIndex == -1) {
+            if (data == null || data.length == 0) {
                 return;
             }
 
-            (new AsyncTask<Void, Integer, Void>() {
-                @Override
-                protected Void doInBackground(Void... params) {
-                    try {
-                        initiateLogin(data, fragment.profiles.get(profileIndex));
-                    } catch (UnsupportedEncodingException e) {
-                        error("Invalid QR code", "The scanned QR code contained an invalid domain (non-UTF-8).");
-                        e.printStackTrace();
-                    } catch (Exception e) {
-                        error("Failed to process request", e.getMessage());
-                        e.printStackTrace();
-                    }
-                    return null;
-                }
-            }).execute();
+            // Hackish, but I found no way of passing data between a scan intent and the scan results.
+            final Profile profile = fragment.profiles.get(pager.getCurrentItem());
+
+            final String domain;
+            final byte[] sessionHash;
+            try {
+                List<byte[]> parts = Crypto.splitAt(data, SESSION_HASH_SIZE);
+                byte[] domainBytes = parts.get(1);
+                domain = new String(domainBytes, "UTF-8");
+                sessionHash = parts.get(0);
+            } catch (UnsupportedEncodingException | Crypto.AlgorithmException e) {
+                error("Failed to parse data from QR code", e.getMessage());
+                e.printStackTrace();
+                return;
+            }
+
+            new AlertDialog.Builder(this)
+                    .setTitle("Confirm action")
+                    .setMessage("Do you really want to authenticate this session at " + domain + "?")
+                    .setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            try {
+                                try {
+                                    Account account = getAccount(profile, domain);
+                                    login(account, sessionHash);
+                                } catch (NoSuchAccountException e) {
+                                    registerAndLogin(profile, domain, sessionHash);
+                                }
+                            } catch (Crypto.Exception | JSONException e) {
+                                error("Fail", e.getMessage());
+                                e.printStackTrace();
+                            }
+                        }
+                    })
+                    .setNegativeButton("No", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            dialog.cancel();
+                        }
+                    })
+                    .show();
         }
     }
 
@@ -163,20 +185,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void registerAndLogin(Profile profile, String domain, final byte[] sessionHash) throws Crypto.Exception, JSONException {
-        final Account account = new Account(profile.userIdFor(domain), domain, null, null, null);
-        profile.accounts.add(0, account);
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                pager.getAdapter().notifyDataSetChanged();
-            }
-        });
+        Log.d("STEP", "registering");
 
         byte[] seed = Crypto.random(32);
         byte[] revocationCode = Crypto.random(32);
-        account.revocationCodeHash = Crypto.hash(revocationCode);
-        account.keyPair = Crypto.createSigningKey(domain, seed);
-        account.recoveryCode = Crypto.encrypt(profile.onlineMasterKey, Crypto.cat(revocationCode, seed));
+        byte[] revocationCodeHash = Crypto.hash(revocationCode);
+        KeyPair keyPair = Crypto.createSigningKey(domain, seed);
+        byte[] recoveryCode = Crypto.encrypt(profile.onlineMasterKey, Crypto.cat(revocationCode, seed));
+        final Account account = new Account(profile.userIdFor(domain), domain, keyPair, recoveryCode, revocationCodeHash);
+        profile.accounts.add(0, account);
 
         String url = "https://" + account.domain + "/frango/register";
 
@@ -236,21 +253,6 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         throw new NoSuchAccountException(domain);
-    }
-
-    private void initiateLogin(byte[] qrCodeData, Profile profile) throws UnsupportedEncodingException, Crypto.Exception, JSONException {
-        List<byte[]> parts = Crypto.splitAt(qrCodeData, SESSION_HASH_SIZE);
-        byte[] sessionHash = parts.get(0);
-        byte[] domainBytes = parts.get(1);
-
-        final String domain = new String(domainBytes, "UTF-8");
-
-        try {
-            Account account = getAccount(profile, domain);
-            login(account, sessionHash);
-        } catch (NoSuchAccountException e) {
-            registerAndLogin(profile, domain, sessionHash);
-        }
     }
 
     @Override
@@ -351,7 +353,7 @@ public class MainActivity extends AppCompatActivity {
 
             return true;
         } else if (id == R.id.action_import) {
-            final IntentIntegrator integrator = new IntentIntegrator(this, MainActivity.SCAN_PROFILE_IMPORT, -1);
+            final IntentIntegrator integrator = new IntentIntegrator(this, MainActivity.SCAN_PROFILE_IMPORT);
             integrator.initiateScan();
         }
 

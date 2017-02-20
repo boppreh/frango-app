@@ -148,17 +148,14 @@ public class IntentIntegrator {
     private List<String> targetApplications;
     private final Map<String,Object> moreExtras = new HashMap<String,Object>(3);
     private int requestCode;
-    private int profileIndex;
 
     /**
      * @param activity {@link Activity} invoking the integration
-     * @param profileIndex
      */
-    public IntentIntegrator(Activity activity, int requestCode, int profileIndex) {
+    public IntentIntegrator(Activity activity, int requestCode) {
         this.activity = activity;
         this.fragment = null;
         this.requestCode = requestCode;
-        this.profileIndex = profileIndex;
         initializeConfiguration();
     }
 
@@ -326,7 +323,6 @@ public class IntentIntegrator {
         intentScan.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
         intentScan.addFlags(Intent.FLAG_ACTIVITY_CLEAR_WHEN_TASK_RESET);
         attachMoreExtras(intentScan);
-        intentScan.putExtra("profile_index", this.profileIndex);
         startActivityForResult(intentScan, this.requestCode);
         return null;
     }

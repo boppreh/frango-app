@@ -22,9 +22,6 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
-/**
- * Created by BoppreH on 2017-02-11.
- */
 public class Account {
     public byte[] userId;
     public String domain;

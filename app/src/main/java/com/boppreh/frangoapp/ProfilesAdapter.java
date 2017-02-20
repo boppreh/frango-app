@@ -6,8 +6,11 @@ import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentStatePagerAdapter;
 
 class ProfilesAdapter extends FragmentStatePagerAdapter {
-    public ProfilesAdapter(FragmentManager supportFragmentManager) {
+    private final MainActivity mainActivity;
+
+    public ProfilesAdapter(MainActivity mainActivity, FragmentManager supportFragmentManager) {
         super(supportFragmentManager);
+        this.mainActivity = mainActivity;
     }
 
     @Override
@@ -21,11 +24,11 @@ class ProfilesAdapter extends FragmentStatePagerAdapter {
 
     @Override
     public int getCount() {
-        return MainActivity.instance.fragment.profiles.size();
+        return mainActivity.fragment.profiles.size();
     }
 
     @Override
     public CharSequence getPageTitle(int position) {
-        return MainActivity.instance.fragment.profiles.get(position).name;
+        return mainActivity.fragment.profiles.get(position).name;
     }
 }
