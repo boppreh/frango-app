@@ -131,8 +131,8 @@ public class Account implements IAccount, Serializable {
             body.put("user_id", Crypto.toBase64(userId));
             byte[] recovery = Crypto.decrypt(offlineMasterKey, recoveryCode);
             List<byte[]> recoveryParts = Crypto.splitAt(recovery, 32);
-            byte[] seed = recoveryParts.get(0);
-            byte[] revocationCode = recoveryParts.get(1);
+            byte[] revocationCode = recoveryParts.get(0);
+            byte[] privateKeyEncoded = recoveryParts.get(1);
             body.put("revocation_code", Crypto.toBase64(revocationCode));
         } catch (JSONException e) {
             activity.error("Failed encode account removal", e.getMessage());

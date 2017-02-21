@@ -38,6 +38,7 @@ import com.google.zxing.integration.android.IntentIntegrator;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -46,7 +47,16 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
+import java.security.KeyFactory;
 import java.security.KeyPair;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.interfaces.RSAPrivateCrtKey;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.RSAPublicKeySpec;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -89,7 +99,7 @@ public class MainActivity extends AppCompatActivity {
                     fragment.profiles.add(profile);
                 }
             } catch (IOException | ClassNotFoundException e) {
-                error("Failed to load profiles", e.getMessage());
+                //error("Failed to load profiles", e.getMessage());
                 e.printStackTrace();
             }
         }
@@ -148,6 +158,61 @@ public class MainActivity extends AppCompatActivity {
                         }
                     })
                     .show();
+
+        } else if (requestCode == SCAN_PROFILE_IMPORT) {
+
+            final byte[] data = intent.getByteArrayExtra("SCAN_RESULT_BYTE_SEGMENTS_0");
+            if (data == null || data.length == 0) {
+                return;
+            }
+
+            final byte[] privateKeyEncoded = Crypto.fromBase64(data);
+            final Profile profile = new Profile(Crypto.toBase64(Crypto.random(8)), "Imported profile", new ArrayList<IAccount>());
+            (new AsyncTask<Void, Integer, Void>() {
+                @Override
+                protected Void doInBackground(Void... params) {
+                    String keyId = "master " + profile.id;
+                    RSAPrivateCrtKey  privateKey;
+                    PublicKey publicKey;
+                    try {
+                        Log.d("STARTING IMPORT", keyId);
+                        PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(privateKeyEncoded);
+                        KeyFactory kf = KeyFactory.getInstance("RSA");
+                        privateKey = (RSAPrivateCrtKey) kf.generatePrivate(keySpec);
+                        RSAPublicKeySpec publicKeySpec = new java.security.spec.RSAPublicKeySpec(privateKey.getModulus(), privateKey.getPublicExponent());
+                        publicKey = kf.generatePublic(publicKeySpec);
+                        Log.d("FINISHED IMPORT", keyId);
+                    } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+                        error("Failed to import profile", e.getMessage());
+                        e.printStackTrace();
+                        return null;
+                    }
+                    profile.onlineMasterKey = publicKey;
+                    profile.offlineMasterKey = privateKey;
+
+                    fragment.profiles.add(profile);
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            pager.getAdapter().notifyDataSetChanged();
+                        }
+                    });
+
+                    try {
+                        serialize("profile_" + profile.id, profile);
+                        ArrayList<String> profileIds = new ArrayList<>();
+                        for (Profile profile : fragment.profiles) {
+                            profileIds.add(profile.id);
+                        }
+                        serialize(PROFILES_IDS_FILENAME, profileIds);
+                    } catch (IOException e) {
+                        error("Failed to save profiles", e.getMessage());
+                        e.printStackTrace();
+                    }
+
+                    return null;
+                }
+            }).execute();
         }
     }
 
@@ -205,11 +270,10 @@ public class MainActivity extends AppCompatActivity {
     private void registerAndLogin(final Profile profile, String domain, final byte[] sessionHash) throws Crypto.Exception, JSONException {
         Log.d("STEP", "registering");
 
-        byte[] seed = Crypto.random(32);
         byte[] revocationCode = Crypto.random(32);
         byte[] revocationCodeHash = Crypto.hash(revocationCode);
-        KeyPair keyPair = Crypto.createSigningKey(domain, seed);
-        byte[] recoveryCode = Crypto.encrypt(profile.onlineMasterKey, Crypto.cat(seed, revocationCode));
+        KeyPair keyPair = Crypto.createSigningKey(domain);
+        byte[] recoveryCode = Crypto.encrypt(profile.onlineMasterKey, Crypto.cat(revocationCode, keyPair.getPrivate().getEncoded()));
         final Account account = new Account(profile.userIdFor(domain), domain, keyPair, recoveryCode, revocationCodeHash);
         profile.accounts.add(0, account);
 
@@ -319,10 +383,10 @@ public class MainActivity extends AppCompatActivity {
             (new AsyncTask<Void, Integer, Void>() {
                 @Override
                 protected Void doInBackground(Void... params) {
-                    byte[] seed = Crypto.random(32);
+                    KeyPair keyPair;
                     try {
                         String keyId = "master " + profile.id;
-                        KeyPair keyPair = Crypto.createSigningKey(keyId, seed);
+                        keyPair = Crypto.createSigningKey(keyId);
                         profile.onlineMasterKey = keyPair.getPublic();
                         profile.offlineMasterKey = keyPair.getPrivate();
                     } catch (Crypto.Exception e) {
@@ -333,7 +397,7 @@ public class MainActivity extends AppCompatActivity {
 
                     BitMatrix result;
                     try {
-                        result = new MultiFormatWriter().encode(Crypto.toBase64(seed),
+                        result = new MultiFormatWriter().encode(Crypto.toBase64(keyPair.getPrivate().getEncoded()),
                                 BarcodeFormat.QR_CODE, side, side, null);
                     } catch (WriterException e) {
                         dialog.cancel();
@@ -364,9 +428,35 @@ public class MainActivity extends AppCompatActivity {
             }).execute();
 
             return true;
+
         } else if (id == R.id.action_import) {
             final IntentIntegrator integrator = new IntentIntegrator(this, MainActivity.SCAN_PROFILE_IMPORT);
             integrator.initiateScan();
+
+        } else if (id == R.id.action_delete_all) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Confirm action")
+                    .setMessage("Do you really want to remove all profiles, accounts and sessions from this device?")
+                    .setPositiveButton("Yes, wipe everything", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            String dir = getFilesDir().getAbsolutePath();
+                            File f0 = new File(dir, PROFILES_IDS_FILENAME);
+                            boolean d0 = f0.delete();
+                            Log.w("Delete Check", "File deleted: " + dir + "/myFile " + d0);
+                            fragment.profiles.clear();
+                            pager.getAdapter().notifyDataSetChanged();
+                            finishAffinity();
+                            System.exit(0);
+                        }
+                    })
+                    .setNegativeButton("No", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            dialog.cancel();
+                        }
+                    })
+                    .show();
         }
 
         return super.onOptionsItemSelected(item);

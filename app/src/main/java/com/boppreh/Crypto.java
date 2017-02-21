@@ -142,7 +142,7 @@ public class Crypto {
             Cipher cipher = Cipher.getInstance(ENCRYPTION_ALGORITHM);
             cipher.init(Cipher.ENCRYPT_MODE, key);
             return cipher.doFinal(data);
-        } catch (NoSuchAlgorithmException | NoSuchPaddingException | BadPaddingException | IllegalBlockSizeException | InvalidKeyException e) {
+        } catch (NoSuchAlgorithmException | NoSuchPaddingException | BadPaddingException | IllegalBlockSizeException | InvalidKeyException | ArrayIndexOutOfBoundsException e) {
             throw new AlgorithmException("Failed to sign data.", e);
         }
     }
@@ -291,10 +291,10 @@ public class Crypto {
     }
 
     @SuppressWarnings({"unused", "WeakerAccess"})
-    public static KeyPair createEncryptionKey(String alias, byte[] seed) throws AlgorithmException, KeyStoreUnavailableException {
+    public static KeyPair createEncryptionKey(String alias) throws AlgorithmException, KeyStoreUnavailableException {
         try {
             KeyPairGenerator generator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA);
-            generator.initialize(RSA_KEY_SIZE, new SecureRandom(seed));
+            generator.initialize(RSA_KEY_SIZE);
             KeyPair keyPair = generator.generateKeyPair();
             storeKeyPair(keyPair, alias, new KeyProtection.Builder(KeyProperties.PURPOSE_DECRYPT | KeyProperties.PURPOSE_ENCRYPT)
                     .setDigests(KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_SHA512)
@@ -307,10 +307,10 @@ public class Crypto {
     }
 
     @SuppressWarnings({"unused", "WeakerAccess"})
-    public static KeyPair createSigningKey(String alias, byte[] seed) throws AlgorithmException, KeyStoreUnavailableException {
+    public static KeyPair createSigningKey(String alias) throws AlgorithmException, KeyStoreUnavailableException {
         try {
             KeyPairGenerator generator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA);
-            generator.initialize(RSA_KEY_SIZE, new SecureRandom(seed));
+            generator.initialize(RSA_KEY_SIZE);
             KeyPair keyPair = generator.generateKeyPair();
             storeKeyPair(keyPair, alias, new KeyProtection.Builder(KeyProperties.PURPOSE_SIGN | KeyProperties.PURPOSE_VERIFY)
                     .setDigests(KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_SHA512)
