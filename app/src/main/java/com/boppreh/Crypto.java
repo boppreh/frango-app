@@ -193,22 +193,22 @@ public class Crypto {
 
     @SuppressWarnings({"unused", "WeakerAccess"})
     public static String toBase64(String data) {
-        return Base64.encodeToString(data.getBytes(), Base64.DEFAULT);
+        return Base64.encodeToString(data.getBytes(), Base64.URL_SAFE);
     }
 
     @SuppressWarnings({"unused", "WeakerAccess"})
     public static String toBase64(byte[] data) {
-        return Base64.encodeToString(data, Base64.DEFAULT);
+        return Base64.encodeToString(data, Base64.URL_SAFE);
     }
 
     @SuppressWarnings({"unused", "WeakerAccess"})
     public static byte[] fromBase64(String data) {
-        return Base64.decode(data, Base64.DEFAULT);
+        return Base64.decode(data, Base64.URL_SAFE);
     }
 
     @SuppressWarnings({"unused", "WeakerAccess"})
     public static byte[] fromBase64(byte[] data) {
-        return Base64.decode(new String(data), Base64.DEFAULT);
+        return Base64.decode(new String(data), Base64.URL_SAFE);
     }
 
     @SuppressWarnings({"unused", "WeakerAccess"})

@@ -19,6 +19,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.text.ParseException;
@@ -26,7 +27,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
-public class Account implements IAccount {
+public class Account implements IAccount, Serializable {
     public byte[] userId;
     public String domain;
     public KeyPair keyPair;
@@ -104,11 +105,6 @@ public class Account implements IAccount {
         return "account_" + Crypto.toBase64(domain) + ".json";
     }
 
-    public void save(Activity activity) throws JSONException, IOException {
-        FileOutputStream outputStream = activity.openFileOutput(getFilename(), Context.MODE_PRIVATE);
-        outputStream.write(marshall().toString().getBytes());
-    }
-
     public static Account load(Activity activity, String domain) throws IOException, Crypto.Exception, ClassNotFoundException, ParseException, JSONException {
         FileInputStream stream = activity.openFileInput("account_" + Crypto.toBase64(domain) + ".json");
         return unmarshall(new String(Crypto.read(stream)));
@@ -152,7 +148,6 @@ public class Account implements IAccount {
             @Override
             public void onResponse(String response) {
                 callback.removeAndNotify(Account.this);
-                activity.deleteFile(getFilename());
             }
         }, new Response.ErrorListener() {
             @Override
@@ -160,7 +155,6 @@ public class Account implements IAccount {
                 if (error.networkResponse.statusCode == 404) {
                     activity.error("Invalid account", "The account doesn't exist anymore. It'll be removed from the list.");
                     callback.removeAndNotify(Account.this);
-                    activity.deleteFile(getFilename());
                 } else {
                     activity.error("Error on account removal", error.getMessage());
                 }
@@ -187,25 +181,14 @@ public class Account implements IAccount {
             public void onResponse(String response) {
                 sessions.remove(session);
                 callback.notifyUpdate(Account.this);
-                try {
-                    save(activity);
-                } catch (IOException | JSONException e) {
-                    activity.error("Failed to persist changes", e.getMessage());
-                }
             }
         }, new Response.ErrorListener() {
             @Override
             public void onErrorResponse(VolleyError error) {
                 if (error.networkResponse.statusCode == 404) {
                     activity.error("Invalid session", "The session doesn't exist anymore. It'll be removed from the list.");
-                    Log.d("SESSIONS", session.getIso8601());
                     sessions.remove(session);
                     callback.notifyUpdate(Account.this);
-                    try {
-                        save(activity);
-                    } catch (IOException | JSONException e) {
-                        activity.error("Failed to persist changes", e.getMessage());
-                    }
                 } else {
                     activity.error("Error on log out", error.getMessage());
                 }
@@ -235,11 +218,6 @@ public class Account implements IAccount {
             @Override
             public void onResponse(String response) {
                 callback.notifyUpdate(Account.this);
-                try {
-                    save(activity);
-                } catch (IOException | JSONException e) {
-                    activity.error("Failed to persist changes", e.getMessage());
-                }
             }
         });
     }

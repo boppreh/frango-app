@@ -3,6 +3,7 @@ package com.boppreh.frangoapp;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.app.FragmentManager;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -16,6 +17,7 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.EditText;
+import android.widget.ExpandableListView;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -36,11 +38,16 @@ import com.google.zxing.integration.android.IntentIntegrator;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
 import java.security.KeyPair;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 
 import static android.graphics.Color.BLACK;
@@ -53,6 +60,7 @@ public class MainActivity extends AppCompatActivity {
     public static final int SESSION_HASH_SIZE = 32;
     public static final int SCAN_ACCOUNT_LOGIN = 0x0000fe39;
     public static final int SCAN_PROFILE_IMPORT = 0x0000fe38;
+    public static final String PROFILES_IDS_FILENAME = "profiles_ids";
 
     MainFragment fragment;
 
@@ -74,6 +82,16 @@ public class MainActivity extends AppCompatActivity {
         if (fragment == null) {
             fragment = new MainFragment();
             fm.beginTransaction().add(fragment, TAG_RETAINED_FRAGMENT).commit();
+            try {
+                ArrayList<String> profileIds = (ArrayList<String>) load(PROFILES_IDS_FILENAME);
+                for (String profileId : profileIds) {
+                    Profile profile = (Profile) load("profile_" + profileId);
+                    fragment.profiles.add(profile);
+                }
+            } catch (IOException | ClassNotFoundException e) {
+                error("Failed to load profiles", e.getMessage());
+                e.printStackTrace();
+            }
         }
 
         ProfilesAdapter adapter = new ProfilesAdapter(this, getSupportFragmentManager());
@@ -113,7 +131,7 @@ public class MainActivity extends AppCompatActivity {
                         public void onClick(DialogInterface dialog, int which) {
                             try {
                                 try {
-                                    login(getAccount(profile, domain), sessionHash);
+                                    login(profile, getAccount(profile, domain), sessionHash);
                                 } catch (NoSuchAccountException e) {
                                     registerAndLogin(profile, domain, sessionHash);
                                 }
@@ -184,14 +202,14 @@ public class MainActivity extends AppCompatActivity {
         queue.add(stringRequest);
     }
 
-    private void registerAndLogin(Profile profile, String domain, final byte[] sessionHash) throws Crypto.Exception, JSONException {
+    private void registerAndLogin(final Profile profile, String domain, final byte[] sessionHash) throws Crypto.Exception, JSONException {
         Log.d("STEP", "registering");
 
         byte[] seed = Crypto.random(32);
         byte[] revocationCode = Crypto.random(32);
         byte[] revocationCodeHash = Crypto.hash(revocationCode);
         KeyPair keyPair = Crypto.createSigningKey(domain, seed);
-        byte[] recoveryCode = Crypto.encrypt(profile.onlineMasterKey, Crypto.cat(revocationCode, seed));
+        byte[] recoveryCode = Crypto.encrypt(profile.onlineMasterKey, Crypto.cat(seed, revocationCode));
         final Account account = new Account(profile.userIdFor(domain), domain, keyPair, recoveryCode, revocationCodeHash);
         profile.accounts.add(0, account);
 
@@ -207,8 +225,8 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onResponse(String response) {
                 try {
-                    pager.getAdapter().notifyDataSetChanged();
-                    login(account, sessionHash);
+                    profile.notifier.notifyUpdate();
+                    login(profile, account, sessionHash);
                 } catch (JSONException e) {
                     error("Server replied with invalid data", e.getMessage());
                     e.printStackTrace();
@@ -220,11 +238,11 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void login(final IAccount account, final byte[] sessionHash) throws JSONException, Crypto.Exception {
+    private void login(final Profile profile, final IAccount account, final byte[] sessionHash) throws JSONException, Crypto.Exception {
         account.login(this, sessionHash, new IAccount.Notify() {
             @Override
             public void notifyUpdate(IAccount account) {
-                pager.getAdapter().notifyDataSetChanged();
+                profile.notifier.notifyUpdate();
             }
         });
     }
@@ -252,7 +270,7 @@ public class MainActivity extends AppCompatActivity {
         int id = item.getItemId();
 
         if (id == R.id.action_create_profile) {
-            final Profile profile = new Profile("", new ArrayList<IAccount>());
+            final Profile profile = new Profile(Crypto.toBase64(Crypto.random(8)), "", new ArrayList<IAccount>());
 
             final AlertDialog dialog = new AlertDialog.Builder(this)
                     .setTitle("Profile creation")
@@ -268,6 +286,17 @@ public class MainActivity extends AppCompatActivity {
                             }
                             fragment.profiles.add(profile);
                             pager.getAdapter().notifyDataSetChanged();
+                            try {
+                                serialize("profile_" + profile.id, profile);
+                                ArrayList<String> profileIds = new ArrayList<>();
+                                for (Profile profile : fragment.profiles) {
+                                    profileIds.add(profile.id);
+                                }
+                                serialize(PROFILES_IDS_FILENAME, profileIds);
+                            } catch (IOException e) {
+                                error("Failed to save profiles", e.getMessage());
+                                e.printStackTrace();
+                            }
                         }
                     })
                     .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
@@ -292,7 +321,8 @@ public class MainActivity extends AppCompatActivity {
                 protected Void doInBackground(Void... params) {
                     byte[] seed = Crypto.random(32);
                     try {
-                        KeyPair keyPair = Crypto.createSigningKey("master key", seed);
+                        String keyId = "master " + profile.id;
+                        KeyPair keyPair = Crypto.createSigningKey(keyId, seed);
                         profile.onlineMasterKey = keyPair.getPublic();
                         profile.offlineMasterKey = keyPair.getPrivate();
                     } catch (Crypto.Exception e) {
@@ -340,6 +370,23 @@ public class MainActivity extends AppCompatActivity {
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    public void serialize(String filename, Serializable obj) throws IOException {
+        FileOutputStream fos  = this.openFileOutput(filename, Context.MODE_PRIVATE);
+        ObjectOutputStream os = new ObjectOutputStream(fos);
+        os.writeObject(obj);
+        os.close();
+        fos.close();
+    }
+
+    public Object load(String filename) throws IOException, ClassNotFoundException {
+        FileInputStream fis = this.openFileInput(filename);
+        ObjectInputStream is = new ObjectInputStream(fis);
+        Object obj = is.readObject();
+        is.close();
+        fis.close();
+        return obj;
     }
 }
 

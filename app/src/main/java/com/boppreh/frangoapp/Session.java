@@ -5,11 +5,12 @@ import com.boppreh.Crypto;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.Serializable;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
 
-public class Session {
+public class Session implements Serializable {
     public static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd' 'HH:mm:ssZ");
 
     public Date timestamp;

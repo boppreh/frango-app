@@ -9,6 +9,8 @@ import android.widget.BaseExpandableListAdapter;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
+import java.io.IOException;
+
 class AccountsAdapter extends BaseExpandableListAdapter {
 
     private LayoutInflater inflater;
@@ -61,7 +63,7 @@ class AccountsAdapter extends BaseExpandableListAdapter {
                                         account.logout(session, activity, new IAccount.Notify() {
                                             @Override
                                             public void notifyUpdate(IAccount account) {
-                                                notifyDataSetChanged();
+                                                profile.notifier.notifyUpdate();
                                             }
                                         });
                                     }
@@ -114,8 +116,8 @@ class AccountsAdapter extends BaseExpandableListAdapter {
                                     account.remove(profile.offlineMasterKey, activity, new IAccount.RemovalCallback() {
                                         @Override
                                         public void removeAndNotify(IAccount account) {
-                                            profile.accounts.remove(this);
-                                            notifyDataSetChanged();
+                                            profile.accounts.remove(account);
+                                            profile.notifier.notifyUpdate();
                                         }
                                     });
                                 }
