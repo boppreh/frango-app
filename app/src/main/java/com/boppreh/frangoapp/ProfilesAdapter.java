@@ -29,6 +29,12 @@ class ProfilesAdapter extends FragmentStatePagerAdapter {
 
     @Override
     public CharSequence getPageTitle(int position) {
-        return mainActivity.fragment.profiles.get(position).name;
+        Profile profile = mainActivity.fragment.profiles.get(position);
+        if (profile.offlineMasterKey == null) {
+            return profile.name;
+        } else {
+            return profile.name + " (!)";
+        }
+
     }
 }

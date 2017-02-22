@@ -10,18 +10,23 @@
         android:title="Create profile"
         app:showAsAction="ifRoom" />
     <item
-        android:id="@+id/action_import"
-        android:orderInCategory="200"
-        android:title="Import profile"
+        android:id="@+id/action_load_recovery"
+        android:orderInCategory="300"
+        android:title="Load recovery key"
+        app:showAsAction="ifRoom" />
+    <item
+        android:id="@+id/action_unload_recovery"
+        android:orderInCategory="400"
+        android:title="Unload recovery key"
         app:showAsAction="ifRoom" />
     <item
         android:id="@+id/action_refresh"
-        android:orderInCategory="300"
+        android:orderInCategory="500"
         android:title="Refresh all credentials"
-        app:showAsAction="ifRoom" />
+        app:showAsAction="never" />
     <item
         android:id="@+id/action_delete_all"
-        android:orderInCategory="400"
+        android:orderInCategory="600"
         android:title="Delete all data"
-        app:showAsAction="ifRoom" />
+        app:showAsAction="never" />
 </menu>

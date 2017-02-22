@@ -17,7 +17,6 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.EditText;
-import android.widget.ExpandableListView;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -42,23 +41,14 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
-import java.security.KeyFactory;
 import java.security.KeyPair;
-import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
 import java.security.PublicKey;
-import java.security.interfaces.RSAPrivateCrtKey;
-import java.security.interfaces.RSAPrivateKey;
-import java.security.spec.InvalidKeySpecException;
-import java.security.spec.PKCS8EncodedKeySpec;
-import java.security.spec.RSAPublicKeySpec;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -113,7 +103,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void onActivityResult(int requestCode, int resultCode, Intent intent) {
-        if (requestCode == SCAN_ACCOUNT_LOGIN) {
+        if (requestCode == SCAN_ACCOUNT_LOGIN && intent != null) {
             final byte[] data = intent.getByteArrayExtra("SCAN_RESULT_BYTE_SEGMENTS_0");
             if (data == null || data.length == 0) {
                 return;
@@ -147,7 +137,7 @@ public class MainActivity extends AppCompatActivity {
                                 } catch (NoSuchAccountException e) {
                                     registerAndLogin(profile, domain, sessionHash);
                                 }
-                            } catch (Crypto.Exception | JSONException e) {
+                            } catch (Crypto.Exception | JSONException | IOException e) {
                                 error("Fail", e.getMessage());
                                 e.printStackTrace();
                             }
@@ -161,7 +151,7 @@ public class MainActivity extends AppCompatActivity {
                     })
                     .show();
 
-        } else if (requestCode == SCAN_PROFILE_IMPORT) {
+        } else if (requestCode == SCAN_PROFILE_IMPORT && intent != null) {
 
             final byte[] data = intent.getByteArrayExtra("SCAN_RESULT_BYTE_SEGMENTS_0");
             if (data == null || data.length == 0) {
@@ -169,46 +159,49 @@ public class MainActivity extends AppCompatActivity {
             }
 
             final byte[] keyEncoded = Crypto.fromBase64(data);
-            final Profile profile = new Profile(Crypto.toBase64(Crypto.random(8)), "Imported profile", new ArrayList<IAccount>());
-            (new AsyncTask<Void, Integer, Void>() {
-                @Override
-                protected Void doInBackground(Void... params) {
-                    String keyId = "master " + profile.id;
-                    KeyPair keyPair;
-                    try {
-                        keyPair = (KeyPair) load(keyEncoded);
-                    } catch (ClassNotFoundException | IOException e) {
-                        error("Failed to import profile", e.getMessage());
-                        e.printStackTrace();
-                        return null;
-                    }
-                    profile.onlineMasterKey = keyPair.getPublic();
-                    profile.offlineMasterKey = keyPair.getPrivate();
+            KeyPair keyPair;
+            try {
+                keyPair = (KeyPair) load(keyEncoded);
+            } catch (ClassNotFoundException | IOException e) {
+                error("Failed to import profile", e.getMessage());
+                e.printStackTrace();
+                return;
+            }
 
-                    fragment.profiles.add(profile);
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            pager.getAdapter().notifyDataSetChanged();
-                        }
-                    });
+            final Profile profile = getOrCreateProfile(keyPair.getPublic());
+            profile.offlineMasterKey = keyPair.getPrivate();
 
-                    try {
-                        serialize("profile_" + profile.id, profile);
-                        ArrayList<String> profileIds = new ArrayList<>();
-                        for (Profile profile : fragment.profiles) {
-                            profileIds.add(profile.id);
-                        }
-                        serialize(PROFILES_IDS_FILENAME, profileIds);
-                    } catch (IOException e) {
-                        error("Failed to save profiles", e.getMessage());
-                        e.printStackTrace();
-                    }
+            pager.getAdapter().notifyDataSetChanged();
 
-                    return null;
-                }
-            }).execute();
+            try {
+                serialize("profile_" + profile.id, profile);
+            } catch (IOException e) {
+                error("Failed to save profile", e.getMessage());
+                e.printStackTrace();
+            }
         }
+    }
+
+    private Profile getOrCreateProfile(PublicKey publicKey) {
+        for (Profile profile : fragment.profiles) {
+            if (profile.onlineMasterKey.equals(publicKey)) {
+                return profile;
+            }
+        }
+        Profile profile = new Profile(Crypto.toBase64(Crypto.random(8)), "Imported profile", new ArrayList<IAccount>());
+        profile.onlineMasterKey = publicKey;
+        fragment.profiles.add(profile);
+        try {
+            ArrayList<String> profileIds = new ArrayList<>();
+            for (Profile p : fragment.profiles) {
+                profileIds.add(p.id);
+            }
+            serialize(PROFILES_IDS_FILENAME, profileIds);
+        } catch (IOException e) {
+            error("Failed to save profiles", e.getMessage());
+            e.printStackTrace();
+        }
+        return profile;
     }
 
     public void error(final String title, final String message) {
@@ -262,13 +255,13 @@ public class MainActivity extends AppCompatActivity {
         queue.add(stringRequest);
     }
 
-    private void registerAndLogin(final Profile profile, String domain, final byte[] sessionHash) throws Crypto.Exception, JSONException {
+    private void registerAndLogin(final Profile profile, String domain, final byte[] sessionHash) throws Crypto.Exception, JSONException, IOException {
         Log.d("STEP", "registering");
 
         byte[] revocationCode = Crypto.random(32);
         byte[] revocationCodeHash = Crypto.hash(revocationCode);
         KeyPair keyPair = Crypto.createSigningKey(domain);
-        byte[] recoveryCode = Crypto.encrypt(profile.onlineMasterKey, Crypto.cat(revocationCode, keyPair.getPrivate().getEncoded()));
+        byte[] recoveryCode = Crypto.encrypt(profile.onlineMasterKey, Crypto.cat(revocationCode, serialize(keyPair)));
         final Account account = new Account(profile.userIdFor(domain), domain, keyPair, recoveryCode, revocationCodeHash);
         profile.accounts.add(0, account);
 
@@ -292,6 +285,44 @@ public class MainActivity extends AppCompatActivity {
                 } catch (Crypto.Exception e) {
                     error("Error registering new account", e.getMessage());
                     e.printStackTrace();
+                }
+            }
+        }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+                if (error.networkResponse.statusCode == 403) {
+                    Log.d("RECOVERY", "account already exists, attempting recovery");
+                    final JSONObject body = new JSONObject();
+                    try {
+                        body.put("user_id", Crypto.toBase64(account.userId));
+                        post("https://" + account.domain + "/frango/recovery_code", body, new Response.Listener<String>() {
+                            @Override
+                            public void onResponse(String response) {
+                                try {
+                                    Log.d("RECOVERY", "got recovery code back");
+                                    Log.d("RECOVERY", response);
+                                    byte[] recoveryCode = Crypto.fromBase64((String) new JSONObject(response).get("result"));
+                                    account.recoveryCode = recoveryCode;
+                                    List<byte[]> parts = Crypto.splitAt(Crypto.decrypt(profile.offlineMasterKey, recoveryCode), 32);
+                                    byte[] revocationCode = parts.get(0);
+                                    byte[] privateKeyEncoded = parts.get(1);
+                                    account.keyPair = (KeyPair) load(privateKeyEncoded);
+                                    profile.notifier.notifyUpdate();
+                                    login(profile, account, sessionHash);
+                                    Log.d("RECOVERY", "account recovered with success!!!");
+                                } catch (JSONException | Crypto.Exception | ClassNotFoundException | IOException e) {
+                                    error("User already exists", "User already exists, and server sent an invalid response when asked for the recovery code.");
+                                    e.printStackTrace();
+                                }
+                            }
+                        });
+                    } catch (JSONException e) {
+                        error("User already exists", "User already exists, and failed to request recovery code from server.");
+                        e.printStackTrace();
+                    }
+                } else {
+                    error("Failed to register account", error.networkResponse.toString());
+                    error.printStackTrace();
                 }
             }
         });
@@ -424,9 +455,20 @@ public class MainActivity extends AppCompatActivity {
 
             return true;
 
-        } else if (id == R.id.action_import) {
+        } else if (id == R.id.action_load_recovery) {
             final IntentIntegrator integrator = new IntentIntegrator(this, MainActivity.SCAN_PROFILE_IMPORT);
             integrator.initiateScan();
+
+        } else if (id == R.id.action_unload_recovery) {
+            Profile profile = fragment.profiles.get(pager.getCurrentItem());
+            profile.offlineMasterKey = null;
+            pager.getAdapter().notifyDataSetChanged();
+            try {
+                serialize("profile_" + profile.id, profile);
+            } catch (IOException e) {
+                error("Failed to save profile", e.getMessage());
+                e.printStackTrace();
+            }
 
         } else if (id == R.id.action_delete_all) {
             new AlertDialog.Builder(this)
@@ -440,7 +482,6 @@ public class MainActivity extends AppCompatActivity {
                             boolean d0 = f0.delete();
                             Log.w("Delete Check", "File deleted: " + dir + "/myFile " + d0);
                             fragment.profiles.clear();
-                            pager.getAdapter().notifyDataSetChanged();
                             finishAffinity();
                             System.exit(0);
                         }
@@ -477,7 +518,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void serialize(String filename, Serializable obj) throws IOException {
-        FileOutputStream fos  = this.openFileOutput(filename, Context.MODE_PRIVATE);
+        FileOutputStream fos = this.openFileOutput(filename, Context.MODE_PRIVATE);
         ObjectOutputStream os = new ObjectOutputStream(fos);
         os.writeObject(obj);
         os.close();

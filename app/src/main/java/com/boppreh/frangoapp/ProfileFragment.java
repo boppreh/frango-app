@@ -1,7 +1,9 @@
 package com.boppreh.frangoapp;
 
+import android.graphics.Color;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
+import android.support.design.widget.TabLayout;
 import android.support.v4.app.Fragment;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -41,7 +43,7 @@ public class ProfileFragment extends Fragment {
 
         Button clickButton = (Button) rootView.findViewById(R.id.scan);
         final IntentIntegrator integrator = new IntentIntegrator(getActivity(), MainActivity.SCAN_ACCOUNT_LOGIN);
-        Log.d("profile index", profileIndex+"");
+
         clickButton.setOnClickListener(new View.OnClickListener() {
                                            @Override
                                            public void onClick(View v) {
@@ -49,6 +51,7 @@ public class ProfileFragment extends Fragment {
                                            }
                                        }
         );
+
         return rootView;
     }
 }
