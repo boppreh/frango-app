@@ -38,6 +38,8 @@ import com.google.zxing.integration.android.IntentIntegrator;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -166,29 +168,22 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
-            final byte[] privateKeyEncoded = Crypto.fromBase64(data);
+            final byte[] keyEncoded = Crypto.fromBase64(data);
             final Profile profile = new Profile(Crypto.toBase64(Crypto.random(8)), "Imported profile", new ArrayList<IAccount>());
             (new AsyncTask<Void, Integer, Void>() {
                 @Override
                 protected Void doInBackground(Void... params) {
                     String keyId = "master " + profile.id;
-                    RSAPrivateCrtKey  privateKey;
-                    PublicKey publicKey;
+                    KeyPair keyPair;
                     try {
-                        Log.d("STARTING IMPORT", keyId);
-                        PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(privateKeyEncoded);
-                        KeyFactory kf = KeyFactory.getInstance("RSA");
-                        privateKey = (RSAPrivateCrtKey) kf.generatePrivate(keySpec);
-                        RSAPublicKeySpec publicKeySpec = new java.security.spec.RSAPublicKeySpec(privateKey.getModulus(), privateKey.getPublicExponent());
-                        publicKey = kf.generatePublic(publicKeySpec);
-                        Log.d("FINISHED IMPORT", keyId);
-                    } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+                        keyPair = (KeyPair) load(keyEncoded);
+                    } catch (ClassNotFoundException | IOException e) {
                         error("Failed to import profile", e.getMessage());
                         e.printStackTrace();
                         return null;
                     }
-                    profile.onlineMasterKey = publicKey;
-                    profile.offlineMasterKey = privateKey;
+                    profile.onlineMasterKey = keyPair.getPublic();
+                    profile.offlineMasterKey = keyPair.getPrivate();
 
                     fragment.profiles.add(profile);
                     runOnUiThread(new Runnable() {
@@ -397,9 +392,9 @@ public class MainActivity extends AppCompatActivity {
 
                     BitMatrix result;
                     try {
-                        result = new MultiFormatWriter().encode(Crypto.toBase64(keyPair.getPrivate().getEncoded()),
+                        result = new MultiFormatWriter().encode(Crypto.toBase64(serialize(keyPair)),
                                 BarcodeFormat.QR_CODE, side, side, null);
-                    } catch (WriterException e) {
+                    } catch (WriterException | IOException e) {
                         dialog.cancel();
                         error("Failed to create QR code with backup codes", e.getMessage());
                         return null;
@@ -460,6 +455,25 @@ public class MainActivity extends AppCompatActivity {
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    public byte[] serialize(Serializable obj) throws IOException {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream os = new ObjectOutputStream(bos);
+        os.writeObject(obj);
+        byte[] result = bos.toByteArray();
+        bos.close();
+        os.close();
+        return result;
+    }
+
+    public Object load(byte[] data) throws IOException, ClassNotFoundException {
+        ByteArrayInputStream bis = new ByteArrayInputStream(data);
+        ObjectInputStream is = new ObjectInputStream(bis);
+        Object obj = is.readObject();
+        is.close();
+        bis.close();
+        return obj;
     }
 
     public void serialize(String filename, Serializable obj) throws IOException {

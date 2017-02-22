@@ -60,9 +60,8 @@ public class Crypto {
     private static final String ANDROID_KEY_STORE = "AndroidKeyStore";
     private static final long VALIDITY_IN_MILLISECONDS = 100L * 365 * 24 * 80 * 80 * 1000;
     private static final String SELF_SIGNED_COMMON_NAME = "Master Frango";
-    private static final String ENCRYPTION_ALGORITHM = "RSA/ECB/OAEPWithSHA-256AndMGF1Padding";
+    private static final String ENCRYPTION_ALGORITHM = "ECIES";
     private static final String SIGNATURE_ALGORITHM = "SHA256withECDSA";
-    private static final int RSA_KEY_SIZE = 2048;
     private static final int EC_KEY_SIZE = 256;
     private static KeyStore androidKeyStore;
 
@@ -295,13 +294,12 @@ public class Crypto {
     @SuppressWarnings({"unused", "WeakerAccess"})
     public static KeyPair createEncryptionKey(String alias) throws AlgorithmException, KeyStoreUnavailableException {
         try {
-            KeyPairGenerator generator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA);
-            generator.initialize(RSA_KEY_SIZE);
+            KeyPairGenerator generator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC);
+            generator.initialize(EC_KEY_SIZE);
             KeyPair keyPair = generator.generateKeyPair();
-            storeKeyPair(keyPair, alias, new KeyProtection.Builder(KeyProperties.PURPOSE_DECRYPT | KeyProperties.PURPOSE_ENCRYPT)
-                    .setDigests(KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_SHA512)
-                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_RSA_OAEP)
-                    .build(), "SHA256WithRSAEncryption");
+            //storeKeyPair(keyPair, alias, new KeyProtection.Builder(KeyProperties.PURPOSE_DECRYPT | KeyProperties.PURPOSE_ENCRYPT)
+            //        .setDigests(KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_SHA512)
+            //        .build(), "SHA256WithRSAEncryption");
             return keyPair;
         } catch (NoSuchAlgorithmException e) {
             throw new AlgorithmException("Failed to create key pair.", e);
