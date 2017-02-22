@@ -1,5 +1,6 @@
 package com.boppreh;
 
+import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.security.keystore.KeyProtection;
 import android.util.Base64;
@@ -60,8 +61,9 @@ public class Crypto {
     private static final long VALIDITY_IN_MILLISECONDS = 100L * 365 * 24 * 80 * 80 * 1000;
     private static final String SELF_SIGNED_COMMON_NAME = "Master Frango";
     private static final String ENCRYPTION_ALGORITHM = "RSA/ECB/OAEPWithSHA-256AndMGF1Padding";
-    private static final String SIGNATURE_ALGORITHM = "SHA256WithRSA/PSS";
+    private static final String SIGNATURE_ALGORITHM = "SHA256withECDSA";
     private static final int RSA_KEY_SIZE = 2048;
+    private static final int EC_KEY_SIZE = 256;
     private static KeyStore androidKeyStore;
 
     public static class Exception extends java.lang.Exception {
@@ -143,7 +145,7 @@ public class Crypto {
             cipher.init(Cipher.ENCRYPT_MODE, key);
             return cipher.doFinal(data);
         } catch (NoSuchAlgorithmException | NoSuchPaddingException | BadPaddingException | IllegalBlockSizeException | InvalidKeyException | ArrayIndexOutOfBoundsException e) {
-            throw new AlgorithmException("Failed to sign data.", e);
+            throw new AlgorithmException("Failed to encrypt data.", e);
         }
     }
 
@@ -154,7 +156,7 @@ public class Crypto {
             cipher.init(Cipher.DECRYPT_MODE, key);
             return cipher.doFinal(data);
         } catch (NoSuchAlgorithmException | NoSuchPaddingException | BadPaddingException | IllegalBlockSizeException | InvalidKeyException e) {
-            throw new AlgorithmException("Failed to sign data.", e);
+            throw new AlgorithmException("Failed to decrypt data.", e);
         }
     }
 
@@ -281,8 +283,8 @@ public class Crypto {
     }
 
     @SuppressWarnings({"unused", "WeakerAccess"})
-    public static void storeKeyPair(KeyPair keyPair, String alias, KeyProtection keyProtection) throws KeyStoreUnavailableException, AlgorithmException {
-        Certificate[] chain = {generateSelfSignedCertificate(keyPair, SELF_SIGNED_COMMON_NAME, VALIDITY_IN_MILLISECONDS)};
+    public static void storeKeyPair(KeyPair keyPair, String alias, KeyProtection keyProtection, String algorithm) throws KeyStoreUnavailableException, AlgorithmException {
+        Certificate[] chain = {generateSelfSignedCertificate(keyPair, SELF_SIGNED_COMMON_NAME, VALIDITY_IN_MILLISECONDS, algorithm)};
         try {
             getAndroidKeyStore().setEntry(alias, new KeyStore.PrivateKeyEntry(keyPair.getPrivate(), chain), keyProtection);
         } catch (KeyStoreException e) {
@@ -299,7 +301,7 @@ public class Crypto {
             storeKeyPair(keyPair, alias, new KeyProtection.Builder(KeyProperties.PURPOSE_DECRYPT | KeyProperties.PURPOSE_ENCRYPT)
                     .setDigests(KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_SHA512)
                     .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_RSA_OAEP)
-                    .build());
+                    .build(), "SHA256WithRSAEncryption");
             return keyPair;
         } catch (NoSuchAlgorithmException e) {
             throw new AlgorithmException("Failed to create key pair.", e);
@@ -309,20 +311,19 @@ public class Crypto {
     @SuppressWarnings({"unused", "WeakerAccess"})
     public static KeyPair createSigningKey(String alias) throws AlgorithmException, KeyStoreUnavailableException {
         try {
-            KeyPairGenerator generator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA);
-            generator.initialize(RSA_KEY_SIZE);
+            KeyPairGenerator generator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC);
+            generator.initialize(EC_KEY_SIZE);
             KeyPair keyPair = generator.generateKeyPair();
             storeKeyPair(keyPair, alias, new KeyProtection.Builder(KeyProperties.PURPOSE_SIGN | KeyProperties.PURPOSE_VERIFY)
                     .setDigests(KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_SHA512)
-                    .setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PSS)
-                    .build());
+                    .build(), "SHA256WithECDSA");
             return keyPair;
         } catch (NoSuchAlgorithmException e) {
             throw new AlgorithmException("Failed to create key pair.", e);
         }
     }
 
-    private static X509Certificate generateSelfSignedCertificate(KeyPair keyPair, String commonName, long validityInMilliseconds) throws AlgorithmException {
+    private static X509Certificate generateSelfSignedCertificate(KeyPair keyPair, String commonName, long validityInMilliseconds, String algorithm) throws AlgorithmException {
         // This is absolutely ridiculous. This code requires an extra (large!) dependency,
         // all so it can pass a completely useless parameter to a function that doesn't
         // take no for an answer.
@@ -339,7 +340,7 @@ public class Crypto {
                 subjectPublicKeyInfo);
         Security.addProvider(new BouncyCastleProvider());
         try {
-            X509CertificateHolder certHolder = certBuilder.build(new JcaContentSignerBuilder("SHA256WithRSAEncryption").setProvider("SC").build(keyPair.getPrivate()));
+            X509CertificateHolder certHolder = certBuilder.build(new JcaContentSignerBuilder(algorithm).setProvider("SC").build(keyPair.getPrivate()));
             return new JcaX509CertificateConverter().setProvider("BC").getCertificate(certHolder);
         } catch (CertificateException | OperatorCreationException e) {
             throw new AlgorithmException("Failed to generate self-signed certificate from key pair", e);
